@@ -112,6 +112,23 @@ class ParquetTemperatureLoaderTest {
   }
 
   @Test
+  void float32TemperatureColumns_areWidenedExactlyToDouble() {
+    // 0.1f is not 0.1: widening must give the float's exact value, not a decimal re-parse.
+    ParquetFixtures.writeQuery(
+        cityFile("vienna"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(0.1 AS FLOAT) AS tmax_c,"
+            + " CAST(-2.5 AS FLOAT) AS tmin_c");
+    assertEquals("FLOAT", ParquetFixtures.schemaOf(cityFile("vienna")).get("tmax_c"));
+
+    DailyTemp day =
+        new ParquetTemperatureLoader(processedDir).load("vienna").get(LocalDate.of(2024, 1, 1));
+
+    assertEquals((double) 0.1f, day.tmaxC());
+    assertEquals(0.10000000149011612, day.tmaxC());
+    assertEquals(-2.5, day.tminC());
+  }
+
+  @Test
   void dateStoredAsTimestamp_isRejectedNamingDateColumn() {
     // A TIMESTAMP is not a UTC calendar day; silently truncating it could shift days.
     ParquetFixtures.writeQuery(

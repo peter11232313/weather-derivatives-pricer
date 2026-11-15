@@ -22,8 +22,12 @@ Input row (Parquet, one per city per UTC day):
 | column | type | units |
 | --- | --- | --- |
 | `date` | date | UTC calendar day |
-| `tmax_c` | float64 | °C |
-| `tmin_c` | float64 | °C |
+| `tmax_c` | float64 (float32 accepted, widened exactly) | °C |
+| `tmin_c` | float64 (float32 accepted, widened exactly) | °C |
+
+float32 → float64 widening is lossless: the loaded double equals the stored float32 value
+exactly (e.g. `0.1f` loads as `0.10000000149011612`, not `0.1`). Any precision loss
+happened when the file was written; it is ≤ ~1e-6 °C per day, negligible for settlement.
 
 Java API (package `...index`):
 
@@ -61,6 +65,7 @@ daily HDD; 31 × 10 = 310 would be wrong.)
 - [ ] Given a NaN `tmaxC` or `tminC`, then an exception names the date.
 - [ ] Given `tminC > tmaxC`, then an exception names the date.
 - [ ] Given a Parquet file with columns `date` (date), `tmax_c`, `tmin_c` (float64), when loaded for a city, then each row becomes one `DailyTemps` entry keyed by `LocalDate` and the stored °C values are unchanged (round-trip test on a 3-row fixture written by the test itself, not a committed data file).
+- [ ] Given `tmax_c`/`tmin_c` stored as float32, when loaded, then each value equals `(double)` of the stored float exactly (e.g. `0.1f` → `0.10000000149011612`); other non-numeric types are rejected naming the column.
 - [ ] Given a Parquet file missing a required column, then an exception names the column.
 - [ ] Given duplicate dates in the file, then an exception names the date.
 - [ ] Given `data/processed/<city>.parquet` does not exist, then an exception names the path.
