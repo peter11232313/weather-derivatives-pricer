@@ -71,7 +71,10 @@ public final class ParquetTemperatureLoader {
       boolean tmaxIsFloat = requireTemperatureColumn(schema, TMAX_COLUMN, file);
       boolean tminIsFloat = requireTemperatureColumn(schema, TMIN_COLUMN, file);
       return DailyTemps.of(readRows(reader, tmaxIsFloat, tminIsFloat, file));
-    } catch (IOException e) {
+    } catch (TemperatureDataException e) {
+      throw e;
+    } catch (IOException | RuntimeException e) {
+      // Hardwood signals unsupported codecs and corrupt pages with unchecked exceptions.
       throw new TemperatureDataException("cannot read temperature file: " + file, e);
     }
   }

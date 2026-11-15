@@ -6,7 +6,8 @@ import java.util.Objects;
 /**
  * One city's observed daily maximum and minimum temperature for a single UTC calendar day.
  *
- * <p>Construction rejects NaN values and {@code tminC > tmaxC}, naming the date in the error.
+ * <p>Construction rejects non-finite values (NaN, ±∞) and {@code tminC > tmaxC}, naming the date in
+ * the error.
  *
  * @param date UTC calendar day
  * @param tmaxC daily maximum temperature in °C
@@ -17,14 +18,14 @@ public record DailyTemp(LocalDate date, double tmaxC, double tminC) {
   /**
    * Validates the day's values.
    *
-   * @throws TemperatureDataException if a value is NaN or {@code tminC > tmaxC}
+   * @throws TemperatureDataException if a value is non-finite or {@code tminC > tmaxC}
    * @throws NullPointerException if {@code date} is null
    */
   public DailyTemp {
     Objects.requireNonNull(date, "date");
-    if (Double.isNaN(tmaxC) || Double.isNaN(tminC)) {
+    if (!Double.isFinite(tmaxC) || !Double.isFinite(tminC)) {
       throw new TemperatureDataException(
-          "NaN temperature on " + date + ": tmaxC=" + tmaxC + ", tminC=" + tminC);
+          "non-finite temperature on " + date + ": tmaxC=" + tmaxC + ", tminC=" + tminC);
     }
     if (tminC > tmaxC) {
       throw new TemperatureDataException(
