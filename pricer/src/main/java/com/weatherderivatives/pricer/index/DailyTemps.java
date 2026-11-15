@@ -2,11 +2,18 @@ package com.weatherderivatives.pricer.index;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 /** An immutable series of daily temperatures for one city, keyed by UTC calendar day. */
 public final class DailyTemps {
 
-  private DailyTemps() {}
+  private final Map<LocalDate, DailyTemp> byDate;
+
+  private DailyTemps(Map<LocalDate, DailyTemp> byDate) {
+    this.byDate = Map.copyOf(byDate);
+  }
 
   /**
    * Builds a series from individual days.
@@ -17,7 +24,15 @@ public final class DailyTemps {
    * @throws NullPointerException if {@code days} or any element is null
    */
   public static DailyTemps of(Collection<DailyTemp> days) {
-    throw new UnsupportedOperationException("not implemented");
+    Objects.requireNonNull(days, "days");
+    Map<LocalDate, DailyTemp> byDate = new HashMap<>(days.size() * 2);
+    for (DailyTemp day : days) {
+      Objects.requireNonNull(day, "day");
+      if (byDate.putIfAbsent(day.date(), day) != null) {
+        throw new TemperatureDataException("duplicate date " + day.date());
+      }
+    }
+    return new DailyTemps(byDate);
   }
 
   /**
@@ -29,7 +44,11 @@ public final class DailyTemps {
    *     the date)
    */
   public DailyTemp get(LocalDate date) {
-    throw new UnsupportedOperationException("not implemented");
+    DailyTemp day = byDate.get(date);
+    if (day == null) {
+      throw new TemperatureDataException("missing temperature for " + date);
+    }
+    return day;
   }
 
   /**
@@ -38,6 +57,6 @@ public final class DailyTemps {
    * @return number of days
    */
   public int size() {
-    throw new UnsupportedOperationException("not implemented");
+    return byDate.size();
   }
 }
