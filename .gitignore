@@ -1,0 +1,33 @@
+# Build output
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Data — never committed (AGENTS.md)
+# Anchored to the repo root so the Java package .../pricer/data/ is not ignored.
+/data/
+*.parquet
+*.nc
+*.grib
+
+# Secrets
+.env
+.cdsapirc
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+out/
+.DS_Store
+Thumbs.db
+
+# Personal Claude Code settings
+.claude/settings.local.json

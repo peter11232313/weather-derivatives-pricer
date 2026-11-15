@@ -1,0 +1,100 @@
+# Runs the same checks as AGENTS.md "Definition of done",
+# so the agent's "done" and GitHub's green tick agree.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pricer:
+    name: Java pricer (tests + spotless)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pricer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip until the Gradle project exists
+        if: hashFiles('pricer/gradlew') == ''
+        run: echo "::notice::pricer/gradlew not found yet; skipping Java checks."
+
+      - uses: actions/setup-java@v4
+        if: hashFiles('pricer/gradlew') != ''
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: hashFiles('pricer/gradlew') != ''
+
+      # gradlew committed from Windows often lacks the executable bit.
+      - name: Make gradlew executable
+        if: hashFiles('pricer/gradlew') != ''
+        run: chmod +x gradlew
+
+      - name: Format check
+        if: hashFiles('pricer/gradlew') != ''
+        run: ./gradlew spotlessCheck
+
+      - name: Tests
+        if: hashFiles('pricer/gradlew') != ''
+        run: ./gradlew test
+
+      - name: Upload test report
+        if: failure() && hashFiles('pricer/gradlew') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-report
+          path: pricer/build/reports/tests/test
+
+  data-prep:
+    name: Python data-prep (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data-prep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip until Python code exists
+        if: hashFiles('data-prep/**/*.py') == ''
+        run: echo "::notice::No Python files in data-prep yet; skipping Python checks."
+
+      - uses: actions/setup-python@v5
+        if: hashFiles('data-prep/**/*.py') != ''
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            data-prep/pyproject.toml
+            data-prep/requirements*.txt
+
+      - name: Install
+        if: hashFiles('data-prep/**/*.py') != ''
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff pytest
+          if [ -f pyproject.toml ]; then python -m pip install -e ".[dev]" || python -m pip install -e .; fi
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+
+      - name: Lint
+        if: hashFiles('data-prep/**/*.py') != ''
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Tests
+        if: hashFiles('data-prep/**/*.py') != ''
+        run: |
+          # pytest exits 5 when no tests are collected; treat that as a pass for now.
+          pytest -q || [ $? -eq 5 ]
