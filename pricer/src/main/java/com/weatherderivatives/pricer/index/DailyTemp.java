@@ -1,6 +1,7 @@
 package com.weatherderivatives.pricer.index;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 /**
  * One city's observed daily maximum and minimum temperature for a single UTC calendar day.
@@ -20,7 +21,15 @@ public record DailyTemp(LocalDate date, double tmaxC, double tminC) {
    * @throws NullPointerException if {@code date} is null
    */
   public DailyTemp {
-    throw new UnsupportedOperationException("not implemented");
+    Objects.requireNonNull(date, "date");
+    if (Double.isNaN(tmaxC) || Double.isNaN(tminC)) {
+      throw new TemperatureDataException(
+          "NaN temperature on " + date + ": tmaxC=" + tmaxC + ", tminC=" + tminC);
+    }
+    if (tminC > tmaxC) {
+      throw new TemperatureDataException(
+          "tminC > tmaxC on " + date + ": tmaxC=" + tmaxC + ", tminC=" + tminC);
+    }
   }
 
   /**
@@ -29,6 +38,6 @@ public record DailyTemp(LocalDate date, double tmaxC, double tminC) {
    * @return daily mean temperature in °C
    */
   public double meanTempC() {
-    throw new UnsupportedOperationException("not implemented");
+    return (tmaxC + tminC) / 2;
   }
 }
