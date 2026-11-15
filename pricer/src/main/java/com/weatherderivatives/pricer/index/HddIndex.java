@@ -1,6 +1,7 @@
 package com.weatherderivatives.pricer.index;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 /**
  * Heating Degree Day (HDD) index calculations (spec 001).
@@ -66,7 +67,20 @@ public final class HddIndex {
    */
   public static double cumulativeHddDegC(
       DailyTemps temps, LocalDate start, LocalDate endInclusive, double baseC) {
-    throw new UnsupportedOperationException("not implemented");
+    Objects.requireNonNull(temps, "temps");
+    Objects.requireNonNull(start, "start");
+    Objects.requireNonNull(endInclusive, "endInclusive");
+    if (Double.isNaN(baseC)) {
+      throw new IllegalArgumentException("baseC is NaN");
+    }
+    if (start.isAfter(endInclusive)) {
+      throw new IllegalArgumentException("start " + start + " is after end " + endInclusive);
+    }
+    // DailyTemp already guarantees non-NaN values and tmin <= tmax.
+    return start
+        .datesUntil(endInclusive.plusDays(1))
+        .mapToDouble(date -> hddDegC(temps.get(date).meanTempC(), baseC))
+        .sum();
   }
 
   /**
@@ -82,6 +96,6 @@ public final class HddIndex {
    */
   public static double cumulativeHddDegC(
       DailyTemps temps, LocalDate start, LocalDate endInclusive) {
-    throw new UnsupportedOperationException("not implemented");
+    return cumulativeHddDegC(temps, start, endInclusive, DEFAULT_BASE_C);
   }
 }
