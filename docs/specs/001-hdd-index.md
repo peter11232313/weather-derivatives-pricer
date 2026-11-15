@@ -57,23 +57,23 @@ cumulative **31 × 8.0 = 248.0**. (Note: the 10 °C is the daily mean, not the
 daily HDD; 31 × 10 = 310 would be wrong.)
 
 ## Acceptance criteria
-- [ ] Given the 5-day example above with base 18 °C, when cumulative HDD is computed for 2024-01-01..2024-01-05, then it equals **44.0** (tolerance 1e-9).
-- [ ] Given 2024-01-01..2024-01-31 with every day `tmaxC = 14.0`, `tminC = 6.0` (mean 10.0 °C) and base 18 °C, when cumulative HDD is computed, then it equals **248.0** (31 days × 8.0; tolerance 1e-9).
-- [ ] Given a day with mean T above the base (2024-01-03, mean 19.0), then its daily HDD is **0.0**, never negative.
-- [ ] Given a day with mean T exactly equal to the base, then daily HDD is 0.0.
-- [ ] Given base 15.5 °C and the same 5 days, then cumulative HDD is **34.0** (9.5 + 7.5 + 0 + 11.5 + 5.5).
-- [ ] Given a winter season 2023-11-01..2024-03-31 (leap year), then exactly **152** days are accrued; for 2022-11-01..2023-03-31, exactly **151**.
-- [ ] Given start == end, then exactly one day is accrued (period is inclusive).
-- [ ] Given start after end, then an `IllegalArgumentException` is thrown.
-- [ ] Given a missing day inside the period, then an exception names the missing date (no silent skip, no interpolation).
-- [ ] Given a non-finite (NaN or ±∞) `tmaxC` or `tminC`, then an exception names the date; a non-finite base temperature is rejected with `IllegalArgumentException`.
-- [ ] Given `tminC > tmaxC`, then an exception names the date.
-- [ ] Given a Parquet file with columns `date` (date), `tmax_c`, `tmin_c` (float64), when loaded for a city, then each row becomes one `DailyTemps` entry keyed by `LocalDate` and the stored °C values are unchanged (round-trip test on a 3-row fixture written by the test itself, not a committed data file).
-- [ ] Given `tmax_c`/`tmin_c` stored as float32, when loaded, then each value equals `(double)` of the stored float exactly (e.g. `0.1f` → `0.10000000149011612`); any type other than float32/float64 (including integer and decimal) is rejected naming the column.
-- [ ] Given a Parquet file missing a required column, then an exception names the column.
-- [ ] Given duplicate dates in the file, then an exception names the date.
-- [ ] Given `data/processed/<city>.parquet` does not exist, then an exception names the path.
-- [ ] Unit names follow AGENTS.md (`tempC`, `hddDegC`); public methods have Javadoc.
+- [x] Given the 5-day example above with base 18 °C, when cumulative HDD is computed for 2024-01-01..2024-01-05, then it equals **44.0** (tolerance 1e-9).
+- [x] Given 2024-01-01..2024-01-31 with every day `tmaxC = 14.0`, `tminC = 6.0` (mean 10.0 °C) and base 18 °C, when cumulative HDD is computed, then it equals **248.0** (31 days × 8.0; tolerance 1e-9).
+- [x] Given a day with mean T above the base (2024-01-03, mean 19.0), then its daily HDD is **0.0**, never negative.
+- [x] Given a day with mean T exactly equal to the base, then daily HDD is 0.0.
+- [x] Given base 15.5 °C and the same 5 days, then cumulative HDD is **34.0** (9.5 + 7.5 + 0 + 11.5 + 5.5).
+- [x] Given a winter season 2023-11-01..2024-03-31 (leap year), then exactly **152** days are accrued; for 2022-11-01..2023-03-31, exactly **151**.
+- [x] Given start == end, then exactly one day is accrued (period is inclusive).
+- [x] Given start after end, then an `IllegalArgumentException` is thrown.
+- [x] Given a missing day inside the period, then an exception names the missing date (no silent skip, no interpolation).
+- [x] Given a non-finite (NaN or ±∞) `tmaxC` or `tminC`, then an exception names the date; a non-finite base temperature is rejected with `IllegalArgumentException`.
+- [x] Given `tminC > tmaxC`, then an exception names the date.
+- [x] Given a Parquet file with columns `date` (date), `tmax_c`, `tmin_c` (float64), when loaded for a city, then each row becomes one `DailyTemps` entry keyed by `LocalDate` and the stored °C values are unchanged (round-trip test on a 3-row fixture written by the test itself, not a committed data file).
+- [x] Given `tmax_c`/`tmin_c` stored as float32, when loaded, then each value equals `(double)` of the stored float exactly (e.g. `0.1f` → `0.10000000149011612`); any type other than float32/float64 (including integer and decimal) is rejected naming the column.
+- [x] Given a Parquet file missing a required column, then an exception names the column.
+- [x] Given duplicate dates in the file, then an exception names the date.
+- [x] Given `data/processed/<city>.parquet` does not exist, then an exception names the path.
+- [x] Unit names follow AGENTS.md (`tempC`, `hddDegC`); public methods have Javadoc.
 
 ## Open questions
 - Should the cumulative index be rounded (e.g. to 0.1 °C·day) to match exchange settlement, or kept at full precision until payoff?
