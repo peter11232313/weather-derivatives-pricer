@@ -17,6 +17,8 @@ repositories {
 }
 
 dependencies {
+    implementation(libs.hardwood.core)
+    runtimeOnly(libs.snappy.java)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.duckdb.jdbc)

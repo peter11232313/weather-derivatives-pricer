@@ -3,11 +3,17 @@ junit = "6.1.3"
 spotless = "8.11.0"
 googleJavaFormat = "2.0.0"
 duckdb = "2.0.0.1"
+hardwood = "1.0.1.Final"
+snappy = "1.1.10.12"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+# Parquet reader with no Hadoop/Avro dependencies (ADR 0001).
+hardwood-core = { module = "dev.hardwood:hardwood-core", version.ref = "hardwood" }
+# Runtime only: Hardwood's optional Snappy codec; pyarrow and DuckDB write Snappy by default.
+snappy-java = { module = "org.xerial.snappy:snappy-java", version.ref = "snappy" }
 # Test only: writes Parquet fixtures into @TempDir so no data files are committed.
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
 
