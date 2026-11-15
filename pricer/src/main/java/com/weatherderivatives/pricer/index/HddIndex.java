@@ -25,7 +25,19 @@ public final class HddIndex {
    * @throws IllegalArgumentException if any argument is NaN or {@code tminC > tmaxC}
    */
   public static double dailyHddDegC(double tmaxC, double tminC, double baseC) {
-    throw new UnsupportedOperationException("not implemented");
+    if (Double.isNaN(tmaxC) || Double.isNaN(tminC) || Double.isNaN(baseC)) {
+      throw new IllegalArgumentException(
+          "NaN argument: tmaxC=" + tmaxC + ", tminC=" + tminC + ", baseC=" + baseC);
+    }
+    if (tminC > tmaxC) {
+      throw new IllegalArgumentException("tminC > tmaxC: tmaxC=" + tmaxC + ", tminC=" + tminC);
+    }
+    return hddDegC((tmaxC + tminC) / 2, baseC);
+  }
+
+  /** Daily HDD from an already-validated mean; {@code Math.max} maps -0.0 to +0.0. */
+  private static double hddDegC(double meanTempC, double baseC) {
+    return Math.max(0.0, baseC - meanTempC);
   }
 
   /**
@@ -38,7 +50,7 @@ public final class HddIndex {
    * @see #DEFAULT_BASE_C
    */
   public static double dailyHddDegC(double tmaxC, double tminC) {
-    throw new UnsupportedOperationException("not implemented");
+    return dailyHddDegC(tmaxC, tminC, DEFAULT_BASE_C);
   }
 
   /**
