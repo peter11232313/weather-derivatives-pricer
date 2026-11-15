@@ -298,4 +298,65 @@ class HddIndexTest {
     // (9 + -1) / 2 = 4.0
     assertEquals(4.0, new DailyTemp(LocalDate.of(2024, 1, 4), 9.0, -1.0).meanTempC(), TOL);
   }
+
+  // --- Review follow-ups: non-finite inputs, mean-based HDD, -0.0 ---
+
+  @Test
+  void infiniteTemperature_exceptionNamesDate() {
+    TemperatureDataException plus =
+        assertThrows(
+            TemperatureDataException.class,
+            () -> new DailyTemp(LocalDate.of(2024, 1, 7), Double.POSITIVE_INFINITY, 2.0));
+    assertMessageContains(plus, "2024-01-07");
+    TemperatureDataException minus =
+        assertThrows(
+            TemperatureDataException.class,
+            () -> new DailyTemp(LocalDate.of(2024, 1, 8), 10.0, Double.NEGATIVE_INFINITY));
+    assertMessageContains(minus, "2024-01-08");
+  }
+
+  @Test
+  void dailyHdd_infiniteArgument_throwsIllegalArgumentException() {
+    double inf = Double.POSITIVE_INFINITY;
+    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, -inf, 18.0));
+    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, 5.0, 18.0));
+    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, -inf, 18.0));
+    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, inf));
+    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, -inf));
+  }
+
+  @Test
+  void cumulative_infiniteBase_throwsIllegalArgumentException() {
+    DailyTemps temps = DailyTemps.of(fiveDayExample());
+    LocalDate jan1 = LocalDate.of(2024, 1, 1);
+    LocalDate jan5 = LocalDate.of(2024, 1, 5);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.POSITIVE_INFINITY));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.NEGATIVE_INFINITY));
+  }
+
+  @Test
+  void dayStraddlingBase_usesMeanNotAverageOfClippedTmaxTminHdd() {
+    // Base 18. (20, 16): mean 18 -> 0, whereas averaging clipped HDDs would give (0 + 2) / 2 = 1.
+    // (19, 13): mean 16 -> 2, whereas averaging clipped HDDs would give (0 + 5) / 2 = 2.5.
+    DailyTemps temps =
+        DailyTemps.of(
+            List.of(
+                new DailyTemp(LocalDate.of(2024, 3, 1), 20.0, 16.0),
+                new DailyTemp(LocalDate.of(2024, 3, 2), 19.0, 13.0)));
+    assertEquals(
+        2.0,
+        HddIndex.cumulativeHddDegC(temps, LocalDate.of(2024, 3, 1), LocalDate.of(2024, 3, 2), 18.0),
+        TOL);
+  }
+
+  @Test
+  void dailyHdd_negativeZeroBase_returnsPositiveZero() {
+    // base -0.0 with mean +0.0 is the one input whose raw difference is -0.0.
+    // assertEquals(double, double) compares bits, so -0.0 would fail.
+    assertEquals(0.0, HddIndex.dailyHddDegC(0.0, 0.0, -0.0));
+  }
 }

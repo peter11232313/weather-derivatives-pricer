@@ -71,9 +71,19 @@ class ParquetFixtures {
    * fixtures. Cast every column explicitly in {@code selectSql}.
    */
   static Path writeQuery(Path file, String selectSql) {
+    return writeQuery(file, selectSql, "");
+  }
+
+  /**
+   * Like {@link #writeQuery(Path, String)} with extra DuckDB {@code COPY} options, e.g. {@code
+   * "COMPRESSION zstd"}.
+   */
+  static Path writeQuery(Path file, String selectSql, String copyOptions) {
+    String options = copyOptions.isEmpty() ? "" : ", " + copyOptions;
     try (Connection conn = connect();
         Statement st = conn.createStatement()) {
-      st.execute("COPY (" + selectSql + ") TO '" + sqlPath(file) + "' (FORMAT PARQUET)");
+      st.execute(
+          "COPY (" + selectSql + ") TO '" + sqlPath(file) + "' (FORMAT PARQUET" + options + ")");
       return file;
     } catch (SQLException e) {
       throw new IllegalStateException("fixture write failed: " + file, e);

@@ -29,6 +29,10 @@ float32 → float64 widening is lossless: the loaded double equals the stored fl
 exactly (e.g. `0.1f` loads as `0.10000000149011612`, not `0.1`). Any precision loss
 happened when the file was written; it is ≤ ~1e-6 °C per day, negligible for settlement.
 
+Supported Parquet compression: Snappy (pyarrow/DuckDB default), gzip, uncompressed.
+zstd (polars' default), LZ4 and Brotli are **not** supported; data-prep must write Snappy
+explicitly. An unreadable file fails with a `TemperatureDataException` naming the path.
+
 Java API (package `...index`):
 
 ```java
@@ -62,10 +66,10 @@ daily HDD; 31 × 10 = 310 would be wrong.)
 - [ ] Given start == end, then exactly one day is accrued (period is inclusive).
 - [ ] Given start after end, then an `IllegalArgumentException` is thrown.
 - [ ] Given a missing day inside the period, then an exception names the missing date (no silent skip, no interpolation).
-- [ ] Given a NaN `tmaxC` or `tminC`, then an exception names the date.
+- [ ] Given a non-finite (NaN or ±∞) `tmaxC` or `tminC`, then an exception names the date; a non-finite base temperature is rejected with `IllegalArgumentException`.
 - [ ] Given `tminC > tmaxC`, then an exception names the date.
 - [ ] Given a Parquet file with columns `date` (date), `tmax_c`, `tmin_c` (float64), when loaded for a city, then each row becomes one `DailyTemps` entry keyed by `LocalDate` and the stored °C values are unchanged (round-trip test on a 3-row fixture written by the test itself, not a committed data file).
-- [ ] Given `tmax_c`/`tmin_c` stored as float32, when loaded, then each value equals `(double)` of the stored float exactly (e.g. `0.1f` → `0.10000000149011612`); other non-numeric types are rejected naming the column.
+- [ ] Given `tmax_c`/`tmin_c` stored as float32, when loaded, then each value equals `(double)` of the stored float exactly (e.g. `0.1f` → `0.10000000149011612`); any type other than float32/float64 (including integer and decimal) is rejected naming the column.
 - [ ] Given a Parquet file missing a required column, then an exception names the column.
 - [ ] Given duplicate dates in the file, then an exception names the date.
 - [ ] Given `data/processed/<city>.parquet` does not exist, then an exception names the path.

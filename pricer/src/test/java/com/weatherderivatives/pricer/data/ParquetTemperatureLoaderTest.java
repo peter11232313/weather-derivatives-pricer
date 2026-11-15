@@ -170,6 +170,70 @@ class ParquetTemperatureLoaderTest {
   }
 
   @Test
+  void infiniteTemperatureInFile_exceptionNamesDate() {
+    ParquetFixtures.writeTemps(
+        cityFile("warsaw"),
+        List.of(
+            new Row(LocalDate.of(2024, 1, 1), 10.0, 2.0),
+            new Row(LocalDate.of(2024, 1, 2), Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)));
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    TemperatureDataException ex =
+        assertThrows(TemperatureDataException.class, () -> loader.load("warsaw"));
+    assertMessageContains(ex, "2024-01-02");
+  }
+
+  @Test
+  void unsupportedCompression_isTemperatureDataExceptionNamingPath() {
+    // zstd (polars' default) needs zstd-jni, which is not on the classpath; the failure must
+    // still honour load()'s contract rather than leak a library exception.
+    ParquetFixtures.writeQuery(
+        cityFile("zurich"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(10.0 AS DOUBLE) AS tmax_c,"
+            + " CAST(2.0 AS DOUBLE) AS tmin_c",
+        "COMPRESSION zstd");
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    TemperatureDataException ex =
+        assertThrows(TemperatureDataException.class, () -> loader.load("zurich"));
+    assertMessageContains(ex, cityFile("zurich").toString());
+  }
+
+  @Test
+  void integerTemperatureColumn_isRejectedNamingColumn() {
+    ParquetFixtures.writeQuery(
+        cityFile("lisbon"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(10 AS INTEGER) AS tmax_c,"
+            + " CAST(2.0 AS DOUBLE) AS tmin_c");
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    TemperatureDataException ex =
+        assertThrows(TemperatureDataException.class, () -> loader.load("lisbon"));
+    assertMessageContains(ex, "tmax_c");
+  }
+
+  @Test
+  void mixedDoubleAndFloat32Columns_eachReadWithItsOwnType() {
+    // tmax DOUBLE, tmin FLOAT with a non-representable value: catches swapped type flags.
+    ParquetFixtures.writeQuery(
+        cityFile("athens"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(0.1 AS DOUBLE) AS tmax_c,"
+            + " CAST(-0.3 AS FLOAT) AS tmin_c");
+    DailyTemp day =
+        new ParquetTemperatureLoader(processedDir).load("athens").get(LocalDate.of(2024, 1, 1));
+    assertEquals(0.1, day.tmaxC());
+    assertEquals((double) -0.3f, day.tminC());
+  }
+
+  @Test
+  void pre1970Date_roundTrips() {
+    // ERA5 starts in 1940; Parquet DATE stores days since 1970-01-01, so these are negative.
+    Row early = new Row(LocalDate.of(1963, 1, 15), -5.5, -14.25);
+    Row first = new Row(LocalDate.of(1940, 1, 1), 3.0, -1.0);
+    ParquetFixtures.writeTemps(cityFile("bern"), List.of(early, first));
+    DailyTemps temps = new ParquetTemperatureLoader(processedDir).load("bern");
+    assertEquals(new DailyTemp(early.date(), -5.5, -14.25), temps.get(early.date()));
+    assertEquals(new DailyTemp(first.date(), 3.0, -1.0), temps.get(first.date()));
+  }
+
+  @Test
   void tminAboveTmaxInFile_exceptionNamesDate() {
     ParquetFixtures.writeTemps(
         cityFile("dublin"), List.of(new Row(LocalDate.of(2024, 3, 31), 5.0, 6.0)));
