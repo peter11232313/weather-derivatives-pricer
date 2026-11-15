@@ -76,6 +76,7 @@ daily HDD; 31 × 10 = 310 would be wrong.)
 - [x] Unit names follow AGENTS.md (`tempC`, `hddDegC`); public methods have Javadoc.
 
 ## Open questions
-- Should the cumulative index be rounded (e.g. to 0.1 °C·day) to match exchange settlement, or kept at full precision until payoff?
-- Daily Tmax/Tmin: hourly `t2m` max/min over the UTC day, or ERA5 `mx2t`/`mn2t`? (Decide in `data-prep`, record in an ADR.)
-- Nearest grid cell vs 3×3 mean as the default city value?
+None open. Resolved 2026-11-16:
+- **Rounding:** the index engine stays at full precision. Settlement rounding (e.g. daily HDD to 0.1 °C·day) is a contract term, specified per contract in the payoff spec.
+- **Daily Tmax/Tmin source:** ERA5 `mx2t`/`mn2t`, UTC day D = values stamped D 01:00..D+1 00:00 — [ADR 0002](../decisions/0002-daily-tmax-tmin-source.md).
+- **City value:** interpolated to each settlement station's coordinates (nearest land cell for coastal stations) — [ADR 0003](../decisions/0003-city-value-at-settlement-station.md).

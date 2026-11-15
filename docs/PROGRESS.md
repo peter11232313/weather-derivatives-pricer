@@ -15,13 +15,15 @@ _Last updated: 2026-11-16_
 ## Next
 1. Write spec 002 from `docs/specs/_template.md` — candidates: CDD index, or data-prep ERA5 → `data/processed/<city>.parquet`.
 2. Whichever comes first, the data-prep spec must require Snappy (not zstd) Parquet with a DATE `date` column, `tmax_c`/`tmin_c` float64 (see spec 001 and ADR 0001).
-3. Optionally delete the merged remote branch `feat/001-hdd-index`.
+3. The data-prep spec must also follow ADR 0002 (`mx2t`/`mn2t`, hour alignment D 01:00..D+1 00:00) and ADR 0003 (interpolate to settlement-station coordinates; needs a station registry and the land-sea mask).
+4. The payoff spec must carry per-contract settlement rounding (the index stays full precision).
+5. Optionally delete the merged remote branch `feat/001-hdd-index`.
+
+## Decisions (2026-11-16)
+- Spec 001 open questions resolved: full-precision index; [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) `mx2t`/`mn2t`; [ADR 0003](decisions/0003-city-value-at-settlement-station.md) station interpolation.
 
 ## Open questions
-**From spec 001 (not blocking)**
-- Round the cumulative index to exchange settlement precision, or keep full precision until payoff?
-- Daily Tmax/Tmin from hourly `t2m` max/min or ERA5 `mx2t`/`mn2t`? (data-prep; record in an ADR.)
-- Nearest grid cell vs 3×3 mean as the default city value? (data-prep.)
+- Update the `era5-data` skill, which still says "nearest grid cell AND a 3×3 mean" (conflicts with ADR 0003)?
 
 **Raised in review (user's call)**
 - Add a physical range check on temperatures (e.g. reject outside −90..60 °C)? Not in the spec today.
