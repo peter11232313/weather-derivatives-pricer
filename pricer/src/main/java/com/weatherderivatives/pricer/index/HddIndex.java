@@ -33,7 +33,7 @@ public final class HddIndex {
     if (tminC > tmaxC) {
       throw new IllegalArgumentException("tminC > tmaxC: tmaxC=" + tmaxC + ", tminC=" + tminC);
     }
-    return hddDegC((tmaxC + tminC) / 2, baseC);
+    return hddDegC(DailyTemp.meanTempC(tmaxC, tminC), baseC);
   }
 
   /** Daily HDD from an already-validated mean; {@code Math.max} maps -0.0 to +0.0. */

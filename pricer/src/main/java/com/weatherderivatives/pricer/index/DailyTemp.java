@@ -39,6 +39,15 @@ public record DailyTemp(LocalDate date, double tmaxC, double tminC) {
    * @return daily mean temperature in °C
    */
   public double meanTempC() {
-    return (tmaxC + tminC) / 2;
+    return meanTempC(tmaxC, tminC);
+  }
+
+  /**
+   * {@code (tmaxC + tminC) / 2}, computed as {@code tmaxC / 2 + tminC / 2} so finite inputs never
+   * overflow. Halving is exact for normal doubles, so for any physical temperature the result is
+   * bit-identical to the direct formula.
+   */
+  static double meanTempC(double tmaxC, double tminC) {
+    return tmaxC / 2 + tminC / 2;
   }
 }

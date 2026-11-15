@@ -359,4 +359,17 @@ class HddIndexTest {
     // assertEquals(double, double) compares bits, so -0.0 would fail.
     assertEquals(0.0, HddIndex.dailyHddDegC(0.0, 0.0, -0.0));
   }
+
+  @Test
+  void extremeFiniteTemperatures_meanDoesNotOverflow() {
+    // (tmax + tmin) / 2 overflows to -Infinity here; the mean of two finite values must be finite.
+    double max = Double.MAX_VALUE;
+    DailyTemp day = new DailyTemp(LocalDate.of(2024, 1, 1), -max, -max);
+    assertEquals(-max, day.meanTempC());
+    assertTrue(Double.isFinite(HddIndex.dailyHddDegC(-max, -max, 18.0)));
+    assertEquals(0.0, HddIndex.dailyHddDegC(max, max, 18.0));
+    assertTrue(
+        Double.isFinite(
+            HddIndex.cumulativeHddDegC(DailyTemps.of(List.of(day)), day.date(), day.date(), 18.0)));
+  }
 }
