@@ -19,6 +19,7 @@ repositories {
 dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.duckdb.jdbc)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
