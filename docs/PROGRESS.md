@@ -21,10 +21,9 @@ _Last updated: 2026-11-16_
 
 ## Decisions (2026-11-16)
 - Spec 001 open questions resolved: full-precision index; [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) `mx2t`/`mn2t`; [ADR 0003](decisions/0003-city-value-at-settlement-station.md) station interpolation.
+- `era5-data` skill updated to follow ADR 0002 and 0003.
 
 ## Open questions
-- Update the `era5-data` skill, which still says "nearest grid cell AND a 3×3 mean" (conflicts with ADR 0003)?
-
 **Raised in review (user's call)**
 - Add a physical range check on temperatures (e.g. reject outside −90..60 °C)? Not in the spec today.
 
