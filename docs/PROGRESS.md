@@ -3,20 +3,19 @@
 _Last updated: 2026-11-16_
 
 ## Done
-- **Spec 001 — HDD index engine** implemented on branch `feat/001-hdd-index` (not yet merged or pushed).
+- **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
   - `HddIndex` (daily + cumulative HDD, inclusive UTC period, default base 18 °C), `DailyTemp`/`DailyTemps` with validation, `ParquetTemperatureLoader` (Hardwood).
-  - 69 tests green; Spotless and Javadoc clean. All 17 acceptance criteria ticked.
-  - Reviewed by `code-reviewer` and `quant-reviewer`: no blockers. Follow-ups fixed: reject ±∞ temperatures and base; wrap Parquet library errors (e.g. zstd) as `TemperatureDataException`; overflow-safe mean; extra tests (base-straddling day, −0.0, mixed float/double, pre-1970 dates).
-  - Spec changes made along the way: 248 HDD example; Parquet-loading criteria; float32 accepted and widened exactly; "non-finite" instead of "NaN"; supported codecs listed.
-- Gradle build for `pricer/`: Gradle 9.9.1 wrapper, Java 21, JUnit 6.1.3, Spotless 8.11.0 (google-java-format).
-- ADR [0001](decisions/0001-parquet-reader.md): Hardwood for Parquet reading, snappy-java at runtime, DuckDB for test fixtures.
+  - 69 tests; all 17 acceptance criteria ticked. Reviewed by `code-reviewer` and `quant-reviewer`, no open findings.
+  - Review follow-ups fixed: reject ±∞ temperatures and base; wrap Parquet library errors (e.g. zstd) as `TemperatureDataException`; overflow-safe mean; extra tests.
+- Gradle build for `pricer/`: Gradle 9.9.1 wrapper, Java 21, JUnit 6.1.3, Spotless 8.11.0.
+- ADR [0001](decisions/0001-parquet-reader.md): Hardwood for Parquet, snappy-java at runtime, DuckDB for test fixtures.
 - README and CHANGELOG created.
+- Repo on GitHub (private): https://github.com/peter11232313/weather-derivatives-pricer — default branch `main` (renamed from `master`).
 
 ## Next
-1. Push `feat/001-hdd-index` and open a PR (description drafted in the session); check CI is green on Linux (native libs: snappy-java, DuckDB).
-2. Decide the branch layout: `master` holds only the first commit; the configured main branch is `main`.
-3. Next spec: write `docs/specs/002-*.md` (e.g. CDD index or data-prep ERA5 → Parquet), starting from `_template.md`.
-4. `data-prep` must write Snappy (not zstd) Parquet with a DATE `date` column — record in its spec.
+1. Write spec 002 from `docs/specs/_template.md` — candidates: CDD index, or data-prep ERA5 → `data/processed/<city>.parquet`.
+2. Whichever comes first, the data-prep spec must require Snappy (not zstd) Parquet with a DATE `date` column, `tmax_c`/`tmin_c` float64 (see spec 001 and ADR 0001).
+3. Optionally delete the merged remote branch `feat/001-hdd-index`.
 
 ## Open questions
 **From spec 001 (not blocking)**
@@ -29,4 +28,4 @@ _Last updated: 2026-11-16_
 
 **Repo housekeeping**
 - Three subagents (`code-reviewer`, `planner`, `test-writer`) live in `~/.claude/agents/`, not the repo; move them to `.claude/agents/` so collaborators get them?
-- Java/Gradle installed after this Claude Code session started; restart it so they're on PATH.
+- Java/Gradle were installed after this Claude Code session started; restart Claude Code so they're on PATH (`JAVA_HOME` = `C:\Program Files\Java\jdk-21.0.12.1`).
