@@ -21,9 +21,11 @@ class DataDirs:
 
 def repo_root() -> Path:
     """Return the repository root: the parent of the ``data-prep`` folder."""
-    raise NotImplementedError
+    # src/dataprep/paths.py -> src/dataprep -> src -> data-prep -> <repo>
+    return Path(__file__).resolve().parents[3]
 
 
 def default_dirs() -> DataDirs:
     """Return ``<repo>/data/raw``, ``<repo>/data/processed`` and ``<repo>/data/pricer``."""
-    raise NotImplementedError
+    data = repo_root() / "data"
+    return DataDirs(raw=data / "raw", processed=data / "processed", pricer=data / "pricer")
