@@ -11,7 +11,7 @@ Portfolio project: code quality and correctness matter more than features.
 - Run API: `./gradlew bootRun` → POST http://localhost:8080/price
 
 ## Structure
-- `data-prep/` Python: ERA5 → daily mean T per city → `data/processed/*.parquet`
+- `data-prep/` Python: ERA5 → daily Tmax/Tmin per settlement station → `data/processed/` → (publish) → `data/pricer/<city>.parquet`
 - `pricer/.../index` degree-day indices · `.../model` burn, index-distribution, daily OU sim
 - `pricer/.../contract` payoffs (call/put/swap/collar, tick, cap) · `.../api` REST layer only
 - Specs: `docs/specs/NNN-*.md` · Decisions: `docs/decisions/`

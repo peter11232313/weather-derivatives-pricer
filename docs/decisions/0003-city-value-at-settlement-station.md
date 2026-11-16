@@ -30,8 +30,8 @@ Stations live in a versioned registry (city → station name, WMO/ICAO id, latit
 longitude), defined in the data-prep spec.
 
 ## Consequences
-- The pricer still reads one series per city; `data/processed/<city>.parquet` is
-  unchanged (spec 001).
+- The pricer still reads one series per city in the spec 001 format, from the validated
+  copy in `data/pricer/<city>.parquet` (spec 002).
 - Needs the static `land_sea_mask` field once per grid.
 - Nearest-cell and 3×3 values may still be computed as **diagnostics** only, to monitor
   sensitivity; they are not the city value.

@@ -11,6 +11,8 @@ In:
 - Cumulative HDD over an inclusive `LocalDate` accrual period (UTC days).
 - Configurable base temperature, default **18.0 °C** (European exchange convention).
 - Loading daily temperatures for one city from `data/processed/<city>.parquet`.
+  (Since spec 002 the pricer reads the validated copy in `data/pricer/`; the loader takes
+  its folder as a constructor argument, so the code is unchanged.)
 
 Out (later specs):
 - CDD index, detrending, burn analysis, OU simulation, payoffs, REST endpoint.
