@@ -119,28 +119,28 @@ station at (51.375, −0.375) → bilinear value **13.0**.
 ## Acceptance criteria
 Tests run offline: the CDS client is a fake passed in by the test, inputs are small
 synthetic xarray datasets built in the test, and all paths are under pytest's `tmp_path`.
-- [ ] Given the hour-alignment example, then 2024-01-01 has `tmax_c = 12.0`, `tmin_c = −3.0`, and the 2024-01-01 00:00 values go to 2023-12-31.
-- [ ] Given the interpolation example, then the station value is **13.0** (tolerance 1e-9) and metadata `method = bilinear`.
-- [ ] Given a field linear in lat and lon, then bilinear interpolation reproduces it exactly at any station inside the cell.
-- [ ] Given one of the four surrounding cells with non-zero bilinear weight with `lsm < 0.5` (any corner; cells with zero weight, e.g. for a station on a grid line or node, are ignored), then the nearest cell with `lsm ≥ 0.5` (distance and tie-break above) is used and `method = nearest_land`; given no land cell in the box, then an error names the city.
-- [ ] Given hourly fields whose daily peaks differ between cells, then Tmax is the max of the **interpolated hourly** series, not the interpolation of per-cell daily maxima (known answer in the test).
-- [ ] Given float64 input in kelvin, then 273.15 K → exactly 0.0 °C, converted once on load; input with `units` other than `K` is rejected.
-- [ ] Given overlapping `expver` 1 (ERA5) and 5 (ERA5T) values, then ERA5 is kept.
-- [ ] Given latitude stored north→south, then results equal those from the same data stored south→north.
-- [ ] Given two consecutive year files, then 31 December of the first year uses 00:00 of 1 January from the second file; given the final year, then the one-step file is used; neither is double-counted.
-- [ ] Given 2024-01-01..2024-12-31 (leap year), then the output has exactly **366** rows, sorted, with no gaps; given 2023, **365**.
-- [ ] Given a missing hourly time step inside the range (including the next day's 00:00), then an error names the missing timestamp; nothing is skipped or interpolated in time.
-- [ ] Given a NaN in the station's hourly series, or a daily `tmin_c > tmax_c`, then an error names the date.
-- [ ] The written file has columns `date` (DATE), `tmax_c`, `tmin_c` (DOUBLE), Snappy compression and all the metadata keys above with valid values (`method` bilinear/nearest_land, `source`, 12 lowercase hex `registry_version`); `registry_version` equals the SHA-256 prefix of the registry file.
-- [ ] Given a London station, then the download area is N 52.0, W −1.0, S 50.75, E 0.25.
-- [ ] Given a target raw file that already exists, then no download is made; a failed download leaves no partial file (temp file + rename); a zip of netCDF parts is merged into one file; a response that is not readable netCDF with the requested variables is an error and leaves no file.
-- [ ] Given a valid processed file, when published, then an identical file appears in the pricer folder via temp file + rename.
-- [ ] Given a processed file that fails validation (wrong schema, not Snappy, missing or invalid metadata, gaps, duplicate or unsorted dates, NaN, `tmin_c > tmax_c`, or row count ≠ days in `start..end`), when published, then an error names the problem and the pricer folder is unchanged (an existing published file is not overwritten).
-- [ ] Given start after end, a missing registry file, a raw file missing a variable or on another grid, or a locked target file, then a data-prep error names the problem and path (no traceback; CLI exit 1).
-- [ ] Given default options, then raw, processed and pricer folders resolve to `<repo>/data/raw`, `<repo>/data/processed` and `<repo>/data/pricer` regardless of the cwd.
-- [ ] Given a registry entry with an invalid key, out-of-range coordinates or a duplicate city, then an error names the entry.
+- [x] Given the hour-alignment example, then 2024-01-01 has `tmax_c = 12.0`, `tmin_c = −3.0`, and the 2024-01-01 00:00 values go to 2023-12-31.
+- [x] Given the interpolation example, then the station value is **13.0** (tolerance 1e-9) and metadata `method = bilinear`.
+- [x] Given a field linear in lat and lon, then bilinear interpolation reproduces it exactly at any station inside the cell.
+- [x] Given one of the four surrounding cells with non-zero bilinear weight with `lsm < 0.5` (any corner; cells with zero weight, e.g. for a station on a grid line or node, are ignored), then the nearest cell with `lsm ≥ 0.5` (distance and tie-break above) is used and `method = nearest_land`; given no land cell in the box, then an error names the city.
+- [x] Given hourly fields whose daily peaks differ between cells, then Tmax is the max of the **interpolated hourly** series, not the interpolation of per-cell daily maxima (known answer in the test).
+- [x] Given float64 input in kelvin, then 273.15 K → exactly 0.0 °C, converted once on load; input with `units` other than `K` is rejected.
+- [x] Given overlapping `expver` 1 (ERA5) and 5 (ERA5T) values, then ERA5 is kept.
+- [x] Given latitude stored north→south, then results equal those from the same data stored south→north.
+- [x] Given two consecutive year files, then 31 December of the first year uses 00:00 of 1 January from the second file; given the final year, then the one-step file is used; neither is double-counted.
+- [x] Given 2024-01-01..2024-12-31 (leap year), then the output has exactly **366** rows, sorted, with no gaps; given 2023, **365**.
+- [x] Given a missing hourly time step inside the range (including the next day's 00:00), then an error names the missing timestamp; nothing is skipped or interpolated in time.
+- [x] Given a NaN in the station's hourly series, or a daily `tmin_c > tmax_c`, then an error names the date.
+- [x] The written file has columns `date` (DATE), `tmax_c`, `tmin_c` (DOUBLE), Snappy compression and all the metadata keys above with valid values (`method` bilinear/nearest_land, `source`, 12 lowercase hex `registry_version`); `registry_version` equals the SHA-256 prefix of the registry file.
+- [x] Given a London station, then the download area is N 52.0, W −1.0, S 50.75, E 0.25.
+- [x] Given a target raw file that already exists, then no download is made; a failed download leaves no partial file (temp file + rename); a zip of netCDF parts is merged into one file; a response that is not readable netCDF with the requested variables is an error and leaves no file.
+- [x] Given a valid processed file, when published, then an identical file appears in the pricer folder via temp file + rename.
+- [x] Given a processed file that fails validation (wrong schema, not Snappy, missing or invalid metadata, gaps, duplicate or unsorted dates, NaN, `tmin_c > tmax_c`, or row count ≠ days in `start..end`), when published, then an error names the problem and the pricer folder is unchanged (an existing published file is not overwritten).
+- [x] Given start after end, a missing registry file, a raw file missing a variable or on another grid, or a locked target file, then a data-prep error names the problem and path (no traceback; CLI exit 1).
+- [x] Given default options, then raw, processed and pricer folders resolve to `<repo>/data/raw`, `<repo>/data/processed` and `<repo>/data/pricer` regardless of the cwd.
+- [x] Given a registry entry with an invalid key, out-of-range coordinates or a duplicate city, then an error names the entry.
 - [ ] **Contract check (manual, documented in the README):** a file published by data-prep is loaded by the Java `ParquetTemperatureLoader` (spec 001) from `data/pricer` without error, with the same row count and values.
-- [ ] `ruff check` and `ruff format --check` clean; public functions have docstrings with units; `pytest -q` green.
+- [x] `ruff check` and `ruff format --check` clean; public functions have docstrings with units; `pytest -q` green.
 
 ## Decisions (approved 2026-11-16)
 1. **Cities**: London Heathrow only for v1 (WMO 03772, EGLL, 51.479, −0.449).
