@@ -1,0 +1,9 @@
+# Settlement stations (spec 002, ADR 0003). One table per city; the key is the city
+# name used in file names and must match [a-z0-9_-]+. Coordinates: decimal degrees, WGS84.
+
+[london]
+station = "London Heathrow"
+wmo_id = "03772"
+icao = "EGLL"
+lat = 51.479
+lon = -0.449

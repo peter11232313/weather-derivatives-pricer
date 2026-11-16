@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataprep"
+version = "0.1.0"
+description = "ERA5 -> daily Tmax/Tmin per settlement station (spec 002)"
+requires-python = ">=3.12"
+dependencies = [
+    "cdsapi>=0.7",     # Copernicus CDS client (ERA5 downloads)
+    "xarray>=2025.1",  # labelled netCDF arrays
+    "netCDF4>=1.7",    # netCDF backend for xarray
+    "numpy>=2.0",
+    "pyarrow>=20",     # Parquet writer with key-value metadata and Snappy
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9", "ruff>=0.17"]
+
+[project.scripts]
+dataprep = "dataprep.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
