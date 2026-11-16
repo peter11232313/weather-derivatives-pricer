@@ -371,3 +371,34 @@ def test_interpolation_does_not_depend_on_dimension_order():
     lsm = make_lsm(LONDON_LATS, LONDON_LONS)
     series, _ = to_station(field, lsm, make_station())
     assert series.values[0] == pytest.approx(14.072, abs=1e-9)
+
+
+# ------------------------------------------------- code re-review follow-ups
+
+
+def test_damaged_zip_is_a_download_error_and_not_kept(raw_dir, london):
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="zip_corrupt"), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+    assert list(raw_dir.iterdir()) == []
+
+
+def test_zip_parts_with_different_time_axes_are_rejected(raw_dir, london):
+    # Merging must not pad mismatched parts with NaN (join="exact").
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="zip_misaligned"), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+    assert list(raw_dir.iterdir()) == []
+
+
+def test_cli_outside_a_checkout_exits_1_without_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(dataprep.paths, "__file__", str(tmp_path / "a" / "b" / "c" / "paths.py"))
+    assert main(["publish", "--city", "london"]) == 1
+    assert "pip install -e" in capsys.readouterr().err
+
+
+def test_process_error_names_the_city_once(raw_dir, processed_dir):
+    station = make_station(city="london")
+    with pytest.raises(DataError) as err:
+        process(station, date(2024, 1, 1), date(2024, 1, 1), raw_dir, processed_dir, "x", NOW)
+    assert str(err.value).count("london") == 1 + str(err.value).count("era5_london")

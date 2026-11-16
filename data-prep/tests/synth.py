@@ -243,6 +243,35 @@ class FakeCdsClient:
         if self.mode == "garbage":
             target_path.write_bytes(b"<html>Service temporarily unavailable</html>")
             return
+        if self.mode in ("zip_corrupt", "zip_misaligned"):
+            ds = self._dataset_for(request)
+            time_dim = "valid_time" if "valid_time" in ds.dims else "time"
+            parts = [ds[["mx2t"]], ds[["mn2t"]]]
+            if self.mode == "zip_misaligned":
+                # Second part shifted by one hour: the time axes no longer match.
+                shifted = ds[time_dim].values + np.timedelta64(1, "h")
+                parts[1] = parts[1].assign_coords({time_dim: shifted})
+            with zipfile.ZipFile(target_path, "w", compression=zipfile.ZIP_STORED) as zf:
+                for i, part in enumerate(parts):
+                    tmp = target_path.with_name(f"part{i}.nc")
+                    part.to_netcdf(tmp)
+                    zf.write(tmp, f"data_stream-oper_stepType-{i}.nc")
+                    tmp.unlink()
+            if self.mode == "zip_corrupt":
+                # Flip a byte inside the last member's data: CRC check fails on read.
+                with zipfile.ZipFile(target_path) as zf:
+                    info = zf.infolist()[-1]
+                raw = bytearray(target_path.read_bytes())
+                name_len = int.from_bytes(
+                    raw[info.header_offset + 26 : info.header_offset + 28], "little"
+                )
+                extra_len = int.from_bytes(
+                    raw[info.header_offset + 28 : info.header_offset + 30], "little"
+                )
+                data_start = info.header_offset + 30 + name_len + extra_len
+                raw[data_start + info.compress_size // 2] ^= 0xFF
+                target_path.write_bytes(bytes(raw))
+            return
         if self.mode in ("zip_split", "netcdf_missing_var"):
             ds = self._dataset_for(request)
             if self.mode == "netcdf_missing_var":

@@ -24,7 +24,12 @@ def main(argv: list[str] | None = None) -> int:
         Process exit code: 0 on success, 1 on a data-prep error (message on stderr), 2 on
         bad arguments.
     """
-    args = _parser().parse_args(argv)  # exits with code 2 on bad arguments
+    try:
+        parser = _parser()  # resolves default folders; fails outside a checkout
+    except DataPrepError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    args = parser.parse_args(argv)  # exits with code 2 on bad arguments
     try:
         args.run(args)
     except DataPrepError as e:

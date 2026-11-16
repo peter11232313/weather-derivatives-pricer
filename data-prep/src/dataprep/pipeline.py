@@ -1,5 +1,6 @@
 """Raw ERA5 files to one processed Parquet file per city (spec 002)."""
 
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -78,6 +79,8 @@ def process(
     try:
         return _process(station, start, end, raw_dir, processed_dir, registry_version, now)
     except DataError as e:
+        if re.search(rf"\b{re.escape(station.city)}\b", str(e)):
+            raise  # already names the city
         raise DataError(f"{station.city}: {e}") from e
 
 

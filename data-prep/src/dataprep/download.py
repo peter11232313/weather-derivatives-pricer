@@ -35,6 +35,7 @@ TEMPERATURE_VARS = ("mx2t", "mn2t")
 LSM_VARS = ("lsm",)
 # Any date works for the static land-sea mask; one step keeps the request small.
 LSM_DATE = date(2024, 1, 1)
+_ZIP_MAGIC = b"PK\x03\x04"
 # Absorbs float noise when a station edge lands exactly on a grid line.
 _SNAP_TOL = 1e-9
 
@@ -209,7 +210,9 @@ def _fetch(
         if not tmp.is_file():
             raise DownloadError(f"download of {target} produced no file")
         ready = tmp
-        if zipfile.is_zipfile(tmp):
+        with tmp.open("rb") as f:
+            is_zip = f.read(len(_ZIP_MAGIC)) == _ZIP_MAGIC
+        if is_zip:
             _merge_zip(tmp, parts, merged, target)
             ready = merged
         try:
@@ -236,21 +239,31 @@ def _fetch(
 def _merge_zip(archive: Path, parts: Path, merged: Path, target: Path) -> None:
     """Unpack the netCDF members of ``archive`` into ``parts`` and merge them into ``merged``."""
     parts.mkdir(exist_ok=True)
-    with zipfile.ZipFile(archive) as zf:
-        members = [m for m in zf.infolist() if not m.is_dir()]
-        if not members or not all(m.filename.endswith(".nc") for m in members):
-            names = ", ".join(m.filename for m in members) or "nothing"
-            raise DownloadError(f"download of {target} is a zip of {names}, not netCDF parts")
-        paths = []
-        for i, member in enumerate(members):
-            path = parts / f"part{i}.nc"
-            path.write_bytes(zf.read(member))
-            paths.append(path)
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            members = [m for m in zf.infolist() if not m.is_dir()]
+            if not members or not all(m.filename.endswith(".nc") for m in members):
+                names = ", ".join(m.filename for m in members) or "nothing"
+                raise DownloadError(f"download of {target} is a zip of {names}, not netCDF parts")
+            paths = []
+            for i, member in enumerate(members):
+                path = parts / f"part{i}.nc"
+                path.write_bytes(zf.read(member))
+                paths.append(path)
+    except zipfile.BadZipFile as e:
+        raise DownloadError(f"download of {target} is a damaged zip: {e}") from e
     try:
         datasets = [open_era5(p) for p in paths]
     except DataError as e:
         raise DownloadError(f"download of {target} holds an unreadable part: {e}") from e
-    xr.merge(datasets, combine_attrs="drop_conflicts").to_netcdf(merged)
+    try:
+        # Explicit, so xarray default changes cannot silently pad or override parts.
+        combined = xr.merge(
+            datasets, compat="no_conflicts", join="exact", combine_attrs="drop_conflicts"
+        )
+    except ValueError as e:  # includes xarray.MergeError
+        raise DownloadError(f"download of {target} has parts that do not line up: {e}") from e
+    combined.to_netcdf(merged)
 
 
 def _snap_up(x: float) -> float:
