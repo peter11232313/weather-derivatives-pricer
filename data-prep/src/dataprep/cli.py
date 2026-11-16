@@ -9,7 +9,7 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from dataprep.errors import DataPrepError, RegistryError
+from dataprep.errors import DataPrepError, DownloadError, RegistryError
 from dataprep.paths import default_dirs, repo_root
 from dataprep.registry import Station, load_registry, registry_version
 
@@ -76,10 +76,16 @@ def _station(args: argparse.Namespace) -> Station:
     return stations[args.city]
 
 
-def _cds_client():  # pragma: no cover - needs network and ~/.cdsapirc
+def _cds_client():
+    """Create the CDS client; a missing or bad ``~/.cdsapirc`` becomes a DownloadError."""
     import cdsapi
 
-    return cdsapi.Client()
+    try:
+        return cdsapi.Client()
+    except Exception as e:  # cdsapi raises plain Exception for config problems
+        raise DownloadError(
+            f"cannot create the Copernicus CDS client (check ~/.cdsapirc, see README): {e}"
+        ) from e
 
 
 def _iso_date(text: str) -> date:

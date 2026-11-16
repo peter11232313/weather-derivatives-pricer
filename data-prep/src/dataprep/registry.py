@@ -50,6 +50,8 @@ def load_registry(path: Path) -> dict[str, Station]:
     try:
         with path.open("rb") as f:
             entries = tomllib.load(f)
+    except OSError as e:
+        raise RegistryError(f"cannot read station registry {path}: {e}") from e
     except tomllib.TOMLDecodeError as e:
         # tomllib reports a duplicate table as "Cannot declare ('london',) twice ...".
         raise RegistryError(f"invalid station registry {path}: {e}") from e

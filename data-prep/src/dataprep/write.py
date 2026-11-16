@@ -8,6 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from dataprep.daily import DailySeries
+from dataprep.errors import DataError
 
 # Spec 001 contract. Non-nullable: a written file never has null cells.
 SCHEMA = pa.schema(
@@ -41,6 +42,8 @@ def write_parquet(path: Path, daily: DailySeries, metadata: Mapping[str, str]) -
 
     Raises:
         ValueError: If a key in ``REQUIRED_METADATA_KEYS`` is missing.
+        DataError: If the file cannot be written or moved into place (e.g. it is open in
+            another program on Windows); the message names the path.
     """
     missing = [key for key in REQUIRED_METADATA_KEYS if key not in metadata]
     if missing:
@@ -58,6 +61,8 @@ def write_parquet(path: Path, daily: DailySeries, metadata: Mapping[str, str]) -
     try:
         pq.write_table(table, tmp, compression="snappy")
         os.replace(tmp, path)
+    except OSError as e:
+        raise DataError(f"cannot write {path} (is it open in another program?): {e}") from e
     finally:
         tmp.unlink(missing_ok=True)
     return path

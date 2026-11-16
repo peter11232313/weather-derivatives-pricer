@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from dataprep.errors import DataPrepError
+
 
 @dataclass(frozen=True)
 class DataDirs:
@@ -20,9 +22,21 @@ class DataDirs:
 
 
 def repo_root() -> Path:
-    """Return the repository root: the parent of the ``data-prep`` folder."""
+    """Return the repository root: the parent of the ``data-prep`` folder.
+
+    Requires running from a checkout (``pip install -e``), not a copied install.
+
+    Raises:
+        DataPrepError: If the package is not inside ``<repo>/data-prep/src``.
+    """
     # src/dataprep/paths.py -> src/dataprep -> src -> data-prep -> <repo>
-    return Path(__file__).resolve().parents[3]
+    root = Path(__file__).resolve().parents[3]
+    if not (root / "data-prep" / "pyproject.toml").is_file():
+        raise DataPrepError(
+            f"cannot find the repository from {__file__}; install with "
+            "`pip install -e .` from data-prep/, or pass the folders explicitly"
+        )
+    return root
 
 
 def default_dirs() -> DataDirs:

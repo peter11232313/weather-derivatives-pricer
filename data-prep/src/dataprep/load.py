@@ -41,6 +41,8 @@ def normalise(ds: xr.Dataset) -> xr.Dataset:
     ds = _drop_number(ds)
     ds = _collapse_expver(ds)
     ds = ds.sortby("latitude")
+    # Remapping to [-180, 180) and sorting is only safe for boxes that do not cross the
+    # antimeridian; download.area_for rejects such stations.
     ds = ds.assign_coords(longitude=((ds["longitude"] + 180.0) % 360.0) - 180.0).sortby("longitude")
     out = {}
     for name, da in ds.data_vars.items():
