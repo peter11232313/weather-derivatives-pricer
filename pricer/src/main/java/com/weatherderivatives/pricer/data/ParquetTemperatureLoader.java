@@ -40,7 +40,7 @@ public final class ParquetTemperatureLoader {
   /**
    * Creates a loader reading from a directory of processed files.
    *
-   * @param processedDir directory holding {@code <city>.parquet} files, e.g. {@code data/processed}
+   * @param processedDir directory holding {@code <city>.parquet} files, e.g. {@code data/pricer}
    * @throws NullPointerException if {@code processedDir} is null
    */
   public ParquetTemperatureLoader(Path processedDir) {

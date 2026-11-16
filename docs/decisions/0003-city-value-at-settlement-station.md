@@ -23,15 +23,18 @@ Each city's series is computed at its **settlement station's coordinates**:
    (Interpolating first gives a true point series; max/min do not commute with
    interpolation.)
 2. If any of the four cells is sea (ERA5 land-sea mask `lsm` < 0.5), use the **nearest
-   land cell** (`lsm` ≥ 0.5) instead of interpolating.
+   land cell** (`lsm` ≥ 0.5) instead of interpolating. Only cells with non-zero bilinear
+   weight count: for a station exactly on a grid line or node, the zero-weight cells are
+   ignored, so the method cannot flip on float rounding (amended 2026-11-16, spec 002
+   review).
 3. Record the method used per city (`bilinear` or `nearest_land`) in file metadata.
 
 Stations live in a versioned registry (city → station name, WMO/ICAO id, latitude,
 longitude), defined in the data-prep spec.
 
 ## Consequences
-- The pricer still reads one series per city; `data/processed/<city>.parquet` is
-  unchanged (spec 001).
+- The pricer still reads one series per city in the spec 001 format, from the validated
+  copy in `data/pricer/<city>.parquet` (spec 002).
 - Needs the static `land_sea_mask` field once per grid.
 - Nearest-cell and 3×3 values may still be computed as **diagnostics** only, to monitor
   sensitivity; they are not the city value.
