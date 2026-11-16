@@ -240,19 +240,37 @@ class FakeCdsClient:
             with zipfile.ZipFile(target_path, "w") as zf:
                 zf.writestr("data_stream-oper.nc", b"not really netcdf")
             return
+        if self.mode == "garbage":
+            target_path.write_bytes(b"<html>Service temporarily unavailable</html>")
+            return
+        if self.mode in ("zip_split", "netcdf_missing_var"):
+            ds = self._dataset_for(request)
+            if self.mode == "netcdf_missing_var":
+                ds[["mx2t"]].to_netcdf(target_path)
+                return
+            # As the new CDS does: one netCDF per GRIB stepType, zipped together.
+            parts = [ds[[name]] for name in ds.data_vars]
+            with zipfile.ZipFile(target_path, "w") as zf:
+                for i, part in enumerate(parts):
+                    tmp = target_path.with_name(f"part{i}.nc")
+                    part.to_netcdf(tmp)
+                    zf.write(tmp, f"data_stream-oper_stepType-{i}.nc")
+                    tmp.unlink()
+            return
+        self._dataset_for(request).to_netcdf(target_path)
+
+    def _dataset_for(self, request: dict[str, Any]) -> xr.Dataset:
         if self.dataset is not None:
-            ds = self.dataset
-        elif is_lsm_request(request):
-            ds = lsm_raw_dataset(make_lsm(LONDON_LATS[:2], LONDON_LONS[:2]))
-        else:
-            ds = make_era5(
-                hours("2024-01-01T00:00", "2024-01-01T01:00"),
-                LONDON_LATS[:2],
-                LONDON_LONS[:2],
-                time_name="valid_time",
-                lat_descending=True,
-            )
-        ds.to_netcdf(target_path)
+            return self.dataset
+        if is_lsm_request(request):
+            return lsm_raw_dataset(make_lsm(LONDON_LATS[:2], LONDON_LONS[:2]))
+        return make_era5(
+            hours("2024-01-01T00:00", "2024-01-01T01:00"),
+            LONDON_LATS[:2],
+            LONDON_LONS[:2],
+            time_name="valid_time",
+            lat_descending=True,
+        )
 
 
 # --------------------------------------------------------------------------- raw writers

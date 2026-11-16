@@ -55,6 +55,9 @@ characters of the SHA-256 of the file's bytes.
 
 **Download area**: station ± 0.5°, widened outward to 0.25° grid lines (no Copernicus
 regridding; room for the 3×3 diagnostic). London: N 52.0, W −1.0, S 50.75, E 0.25.
+Stations within 0.5° of a pole or of ±180° longitude are rejected (not needed for Europe).
+Every raw file's grid must span exactly this area; a file on another grid (e.g. downloaded
+before the station's coordinates were corrected) is an error naming the path.
 
 **Raw files** (`data/raw/`):
 - `era5_<city>_<year>.nc`: `mx2t`, `mn2t`, every hour of the year, Y-01-01 00:00 through
@@ -63,8 +66,14 @@ regridding; room for the 3×3 diagnostic). London: N 52.0, W −1.0, S 50.75, E 
   **only for the final year of a range** and only if `era5_<city>_<year+1>.nc` is absent.
   For every other year, the last day's 00:00 step comes from the next year's file
   (ADR 0002). Processing day D therefore reads the file containing D+1 00:00.
-- `era5_lsm_<city>.nc`: land-sea mask, one time step, its own request (mixing it with
-  hourly fields can make Copernicus return a zip). A zip response is an error.
+- `era5_lsm_<city>.nc`: land-sea mask, one time step, its own request.
+
+**Download format (amended 2026-11-16, review option A)**: the new Copernicus service
+splits netCDF output by GRIB step type (`mx2t` is "max", `mn2t` is "min"), so requests ask
+for `download_format = zip`. A zip of netCDF parts is unpacked and merged into the single
+raw file above; a plain netCDF response is also accepted. Before the rename, the result
+must open as netCDF and contain the requested variables, otherwise the download is an
+error naming the path and nothing is kept (so a bad file is never skipped later).
 
 **Processed / published file** (`<city>.parquet`, spec 001 contract):
 
@@ -113,7 +122,7 @@ synthetic xarray datasets built in the test, and all paths are under pytest's `t
 - [ ] Given the hour-alignment example, then 2024-01-01 has `tmax_c = 12.0`, `tmin_c = −3.0`, and the 2024-01-01 00:00 values go to 2023-12-31.
 - [ ] Given the interpolation example, then the station value is **13.0** (tolerance 1e-9) and metadata `method = bilinear`.
 - [ ] Given a field linear in lat and lon, then bilinear interpolation reproduces it exactly at any station inside the cell.
-- [ ] Given one of the four surrounding cells with `lsm < 0.5`, then the nearest cell with `lsm ≥ 0.5` (distance and tie-break above) is used and `method = nearest_land`; given no land cell in the box, then an error names the city.
+- [ ] Given one of the four surrounding cells with non-zero bilinear weight with `lsm < 0.5` (any corner; cells with zero weight, e.g. for a station on a grid line or node, are ignored), then the nearest cell with `lsm ≥ 0.5` (distance and tie-break above) is used and `method = nearest_land`; given no land cell in the box, then an error names the city.
 - [ ] Given hourly fields whose daily peaks differ between cells, then Tmax is the max of the **interpolated hourly** series, not the interpolation of per-cell daily maxima (known answer in the test).
 - [ ] Given float64 input in kelvin, then 273.15 K → exactly 0.0 °C, converted once on load; input with `units` other than `K` is rejected.
 - [ ] Given overlapping `expver` 1 (ERA5) and 5 (ERA5T) values, then ERA5 is kept.
@@ -122,11 +131,12 @@ synthetic xarray datasets built in the test, and all paths are under pytest's `t
 - [ ] Given 2024-01-01..2024-12-31 (leap year), then the output has exactly **366** rows, sorted, with no gaps; given 2023, **365**.
 - [ ] Given a missing hourly time step inside the range (including the next day's 00:00), then an error names the missing timestamp; nothing is skipped or interpolated in time.
 - [ ] Given a NaN in the station's hourly series, or a daily `tmin_c > tmax_c`, then an error names the date.
-- [ ] The written file has columns `date` (DATE), `tmax_c`, `tmin_c` (DOUBLE), Snappy compression and all the metadata keys above; `registry_version` equals the SHA-256 prefix of the registry file.
+- [ ] The written file has columns `date` (DATE), `tmax_c`, `tmin_c` (DOUBLE), Snappy compression and all the metadata keys above with valid values (`method` bilinear/nearest_land, `source`, 12 lowercase hex `registry_version`); `registry_version` equals the SHA-256 prefix of the registry file.
 - [ ] Given a London station, then the download area is N 52.0, W −1.0, S 50.75, E 0.25.
-- [ ] Given a target raw file that already exists, then no download is made; a failed download leaves no partial file (temp file + rename); a zip response is an error.
+- [ ] Given a target raw file that already exists, then no download is made; a failed download leaves no partial file (temp file + rename); a zip of netCDF parts is merged into one file; a response that is not readable netCDF with the requested variables is an error and leaves no file.
 - [ ] Given a valid processed file, when published, then an identical file appears in the pricer folder via temp file + rename.
-- [ ] Given a processed file that fails validation (wrong schema, not Snappy, missing metadata, gaps, duplicate or unsorted dates, NaN, `tmin_c > tmax_c`, or row count ≠ days in `start..end`), when published, then an error names the problem and the pricer folder is unchanged (an existing published file is not overwritten).
+- [ ] Given a processed file that fails validation (wrong schema, not Snappy, missing or invalid metadata, gaps, duplicate or unsorted dates, NaN, `tmin_c > tmax_c`, or row count ≠ days in `start..end`), when published, then an error names the problem and the pricer folder is unchanged (an existing published file is not overwritten).
+- [ ] Given start after end, a missing registry file, a raw file missing a variable or on another grid, or a locked target file, then a data-prep error names the problem and path (no traceback; CLI exit 1).
 - [ ] Given default options, then raw, processed and pricer folders resolve to `<repo>/data/raw`, `<repo>/data/processed` and `<repo>/data/pricer` regardless of the cwd.
 - [ ] Given a registry entry with an invalid key, out-of-range coordinates or a duplicate city, then an error names the entry.
 - [ ] **Contract check (manual, documented in the README):** a file published by data-prep is loaded by the Java `ParquetTemperatureLoader` (spec 001) from `data/pricer` without error, with the same row count and values.
