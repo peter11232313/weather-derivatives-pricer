@@ -2,6 +2,7 @@ package com.weatherderivatives.pricer.contract;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.YearMonth;
 import java.util.OptionalDouble;
@@ -138,6 +139,23 @@ class HddPayoffTest {
     // call with I < K and put with I > K must be +0.0, not -0.0
     assertEquals(0.0, HddPayoff.payoffGbp(uncapped(ContractType.CALL, 240.0), 100.0));
     assertEquals(0.0, HddPayoff.payoffGbp(uncapped(ContractType.PUT, 240.0), 300.0));
+  }
+
+  @Test
+  void negativeIndex_throwsIllegalArgumentExceptionNamingField() {
+    // an HDD index is a sum of max(0, ...) terms and can never be negative
+    for (ContractType type : ContractType.values()) {
+      IllegalArgumentException ex =
+          assertThrows(
+              IllegalArgumentException.class,
+              () -> HddPayoff.payoffGbp(uncapped(type, 240.0), -0.5));
+      assertTrue(ex.getMessage().contains("indexHddDegC"), ex.getMessage());
+    }
+  }
+
+  @Test
+  void nullContract_throwsNullPointerException() {
+    assertThrows(NullPointerException.class, () -> HddPayoff.payoffGbp(null, 240.0));
   }
 
   // --- Non-finite index -> IllegalArgumentException ---

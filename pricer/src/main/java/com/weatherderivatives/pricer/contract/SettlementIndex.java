@@ -11,6 +11,8 @@ import java.util.Objects;
 /** The settlement index of an HDD contract (spec 003). */
 public final class SettlementIndex {
 
+  private static final BigDecimal TWO = BigDecimal.valueOf(2);
+
   private SettlementIndex() {}
 
   /**
@@ -18,12 +20,13 @@ public final class SettlementIndex {
    *
    * <p>Without {@code dailyHddDecimals} this is exactly {@link HddIndex#cumulativeHddDegC} over
    * {@code accrualStart()..accrualEndInclusive()} at the contract's base. With {@code d} decimals,
-   * each daily HDD is rounded half-up to {@code d} decimals and summed exactly in decimal; the
-   * total is therefore already at {@code d} decimals and is returned as the nearest double.
+   * each daily HDD is computed exactly in decimal, {@code max(0, base − (tmax + tmin) / 2)} on the
+   * shortest decimal forms of the stored values ({@link BigDecimal#valueOf(double)}), rounded
+   * half-up to {@code d} decimals and summed exactly; the total is therefore already at {@code d}
+   * decimals and is returned as the nearest double.
    *
-   * <p>Rounding works on each daily HDD's shortest decimal representation ({@link
-   * BigDecimal#valueOf(double)}), so {@code 1.005} rounds to {@code 1.01} at 2 decimals. A value
-   * that arithmetic left just below a tie (e.g. {@code 8.249999999999998}) rounds down.
+   * <p>Computing in decimal keeps exact ties exact: Tmax 6.9, Tmin 1.8 gives HDD 13.65, which
+   * rounds to 13.7, whereas the binary double {@code 13.649999999999999} would round to 13.6.
    *
    * @param contract the contract terms
    * @param temps daily temperatures covering the accrual period
@@ -41,12 +44,19 @@ public final class SettlementIndex {
       return HddIndex.cumulativeHddDegC(temps, start, end, contract.baseC());
     }
     int decimals = contract.dailyHddDecimals().getAsInt();
+    BigDecimal baseC = BigDecimal.valueOf(contract.baseC());
     BigDecimal total = BigDecimal.ZERO.setScale(decimals);
     for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
       DailyTemp day = temps.get(date);
-      double dailyHddDegC = HddIndex.dailyHddDegC(day.tmaxC(), day.tminC(), contract.baseC());
-      total = total.add(BigDecimal.valueOf(dailyHddDegC).setScale(decimals, RoundingMode.HALF_UP));
+      total = total.add(exactDailyHddDegC(day, baseC).setScale(decimals, RoundingMode.HALF_UP));
     }
     return total.doubleValue();
+  }
+
+  /** {@code max(0, base − (tmax + tmin) / 2)} in exact decimal arithmetic. */
+  private static BigDecimal exactDailyHddDegC(DailyTemp day, BigDecimal baseC) {
+    BigDecimal meanTempC =
+        BigDecimal.valueOf(day.tmaxC()).add(BigDecimal.valueOf(day.tminC())).divide(TWO);
+    return baseC.subtract(meanTempC).max(BigDecimal.ZERO);
   }
 }

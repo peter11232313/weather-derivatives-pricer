@@ -314,6 +314,37 @@ class BurnAnalysisTest {
     assertMessageContains(ex, "2004-01-01");
   }
 
+  @Test
+  void ac8_missingDayWithRoundedContract_exceptionNamesSeasonAndDate() {
+    // same as the middle-season case, but on the rounded (decimal) index path
+    List<DailyTemp> days = januaryExampleDays();
+    days.removeIf(d -> d.date().equals(LocalDate.of(2002, 1, 15)));
+    DailyTemps temps = DailyTemps.of(days);
+    YearMonth jan2010 = YearMonth.of(2010, 1);
+    HddContract rounded =
+        HddContract.of(
+            ContractType.CALL,
+            jan2010,
+            jan2010,
+            240.0,
+            1000.0,
+            OptionalDouble.empty(),
+            OptionalInt.of(1));
+    TemperatureDataException ex =
+        assertThrows(
+            TemperatureDataException.class, () -> BurnAnalysis.run(rounded, temps, 2001, 2003));
+    assertMessageContains(ex, "season 2002");
+    assertMessageContains(ex, "2002-01-15");
+  }
+
+  @Test
+  void nullArguments_throwNullPointerException() {
+    HddContract c = january(ContractType.CALL, 240.0, OptionalDouble.empty());
+    assertThrows(
+        NullPointerException.class, () -> BurnAnalysis.run(null, januaryExample(), 2001, 2003));
+    assertThrows(NullPointerException.class, () -> BurnAnalysis.run(c, null, 2001, 2003));
+  }
+
   // --- AC9: fewer than 2 seasons or firstSeasonYear > lastSeasonYear -> IAE ---
 
   @Test

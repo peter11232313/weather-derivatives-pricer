@@ -176,6 +176,28 @@ class SettlementIndexTest {
   }
 
   @Test
+  void rounding_exactDecimalTieThatIsInexactInBinary_roundsUp() {
+    // Tmax 6.9 / Tmin 1.8: exact HDD 18 - 4.35 = 13.65 -> HALF_UP 13.7; 31 x 13.7 = 424.7.
+    // The double 18 - (6.9/2 + 1.8/2) is 13.649999999999999, which would round to 13.6 (421.6).
+    DailyTemps temps = constant(LocalDate.of(2001, 1, 1), LocalDate.of(2001, 1, 31), 6.9, 1.8);
+    assertEquals(
+        424.7, SettlementIndex.indexHddDegC(januaryCall(JAN_2001, OptionalInt.of(1)), temps));
+    // Tmax 7.9 / Tmin 1.8: exact 13.15 -> 13.2; 31 x 13.2 = 409.2 (double path would give 406.1)
+    DailyTemps temps2 = constant(LocalDate.of(2001, 1, 1), LocalDate.of(2001, 1, 31), 7.9, 1.8);
+    assertEquals(
+        409.2, SettlementIndex.indexHddDegC(januaryCall(JAN_2001, OptionalInt.of(1)), temps2));
+  }
+
+  @Test
+  void nullArguments_throwNullPointerException() {
+    DailyTemps temps = constant(LocalDate.of(2001, 1, 1), LocalDate.of(2001, 1, 31), 14.0, 6.0);
+    assertThrows(NullPointerException.class, () -> SettlementIndex.indexHddDegC(null, temps));
+    assertThrows(
+        NullPointerException.class,
+        () -> SettlementIndex.indexHddDegC(januaryCall(JAN_2001, OptionalInt.empty()), null));
+  }
+
+  @Test
   void roundingIsAppliedToDailyHddNotMeanTemperature() {
     // decimals=0, Tmax 10.0 / Tmin 9.0 -> mean 9.5 -> HDD 8.5.
     // HDD rounded HALF_UP -> 9 (31 x 9 = 279); mean rounded HALF_UP -> 10 -> HDD 8 (248).

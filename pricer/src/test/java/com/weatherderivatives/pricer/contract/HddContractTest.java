@@ -30,7 +30,7 @@ class HddContractTest {
         () -> "expected message to contain '" + expected + "' but was: " + msg);
   }
 
-  /** A valid Nov-Mar call, so each invalid case varies exactly one field. */
+  /** Positional pass-through to the canonical constructor. */
   private static HddContract contract(
       ContractType type,
       YearMonth firstMonth,
@@ -258,6 +258,32 @@ class HddContractTest {
       String fieldName, Executable construct) {
     NullPointerException ex = assertThrows(NullPointerException.class, construct);
     assertMessageContains(ex, fieldName);
+  }
+
+  @Test
+  void negativeZeroStrike_isNormalisedToPositiveZero() {
+    // -0.0 passes "strike >= 0"; it must not make otherwise equal contracts unequal
+    HddContract negZero =
+        contract(
+            ContractType.CALL,
+            NOV_1991,
+            MAR_1992,
+            18.0,
+            -0.0,
+            1.0,
+            OptionalDouble.empty(),
+            OptionalInt.empty());
+    HddContract posZero =
+        contract(
+            ContractType.CALL,
+            NOV_1991,
+            MAR_1992,
+            18.0,
+            0.0,
+            1.0,
+            OptionalDouble.empty(),
+            OptionalInt.empty());
+    assertEquals(posZero, negZero);
   }
 
   // --- Factory of(): default base 18.0 ---

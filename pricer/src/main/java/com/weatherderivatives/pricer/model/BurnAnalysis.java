@@ -14,8 +14,13 @@ import java.util.Objects;
  *
  * <p>For each season, the contract is shifted to that season ({@link HddContract#forSeason(int)}),
  * its settlement index and payoff are computed, and the payoffs are summarised. The burn price is
- * the undiscounted mean payoff; no detrending is applied. Seasons are processed in year order with
- * plain sequential sums, so results are bit-identical for the same inputs.
+ * the undiscounted mean payoff; no detrending is applied. Seasons and days are processed in date
+ * order with fixed summation, so results are bit-identical for the same inputs.
+ *
+ * <p>Known biases, left to later specs: there is no detrending, so under warming the raw burn
+ * overstates HDD (calls and long swaps priced high, puts low); whole calendar months mean a leap
+ * season accrues 29 February, so 151- and 152-day Nov–Mar seasons are mixed. The caller chooses the
+ * seasons and must exclude the season being priced when back-testing.
  */
 public final class BurnAnalysis {
 
@@ -91,13 +96,13 @@ public final class BurnAnalysis {
     int n = seasons.size();
     double payoffSum = 0.0;
     double indexSum = 0.0;
-    double min = Double.POSITIVE_INFINITY;
-    double max = Double.NEGATIVE_INFINITY;
+    double minPayoffGbp = Double.POSITIVE_INFINITY;
+    double maxPayoffGbp = Double.NEGATIVE_INFINITY;
     for (SeasonOutcome s : seasons) {
       payoffSum += s.payoffGbp();
       indexSum += s.indexHddDegC();
-      min = Math.min(min, s.payoffGbp());
-      max = Math.max(max, s.payoffGbp());
+      minPayoffGbp = Math.min(minPayoffGbp, s.payoffGbp());
+      maxPayoffGbp = Math.max(maxPayoffGbp, s.payoffGbp());
     }
     double meanPayoffGbp = payoffSum / n;
     double squaredDeviations = 0.0;
@@ -105,7 +110,8 @@ public final class BurnAnalysis {
       double deviation = s.payoffGbp() - meanPayoffGbp;
       squaredDeviations += deviation * deviation;
     }
-    double stdDevGbp = Math.sqrt(squaredDeviations / (n - 1));
-    return new BurnResult(seasons, meanPayoffGbp, stdDevGbp, min, max, indexSum / n);
+    double payoffStdDevGbp = Math.sqrt(squaredDeviations / (n - 1));
+    return new BurnResult(
+        seasons, meanPayoffGbp, payoffStdDevGbp, minPayoffGbp, maxPayoffGbp, indexSum / n);
   }
 }

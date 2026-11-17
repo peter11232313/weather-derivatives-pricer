@@ -78,6 +78,7 @@ public record HddContract(
       throw new IllegalArgumentException(
           "strikeHddDegC must be finite and >= 0 but was " + strikeHddDegC);
     }
+    strikeHddDegC += 0.0; // -0.0 -> +0.0, so equal terms give equal records
     if (!Double.isFinite(tickGbpPerDegC) || !(tickGbpPerDegC > 0)) {
       throw new IllegalArgumentException(
           "tickGbpPerDegC must be finite and > 0 but was " + tickGbpPerDegC);
@@ -153,6 +154,7 @@ public record HddContract(
    *
    * @param seasonYear year of the shifted contract's first accrual day
    * @return the same terms with both months moved by the same number of years
+   * @throws java.time.DateTimeException if the shifted year is outside {@link YearMonth}'s range
    */
   public HddContract forSeason(int seasonYear) {
     long shiftYears = (long) seasonYear - firstMonth.getYear();

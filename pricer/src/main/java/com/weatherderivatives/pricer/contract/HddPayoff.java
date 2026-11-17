@@ -24,23 +24,25 @@ public final class HddPayoff {
    * @param indexHddDegC the settlement index in °C·day
    * @return the payoff in GBP; exactly {@code +0.0} when nothing is paid
    * @throws NullPointerException if {@code contract} is null
-   * @throws IllegalArgumentException if {@code indexHddDegC} is not finite
+   * @throws IllegalArgumentException if {@code indexHddDegC} is negative or not finite
    */
   public static double payoffGbp(HddContract contract, double indexHddDegC) {
     Objects.requireNonNull(contract, "contract");
-    if (!Double.isFinite(indexHddDegC)) {
-      throw new IllegalArgumentException("indexHddDegC must be finite but was " + indexHddDegC);
+    if (!Double.isFinite(indexHddDegC) || indexHddDegC < 0) {
+      throw new IllegalArgumentException(
+          "indexHddDegC must be finite and >= 0 but was " + indexHddDegC);
     }
-    double strike = contract.strikeHddDegC();
-    double tick = contract.tickGbpPerDegC();
+    double strikeHddDegC = contract.strikeHddDegC();
+    double tickGbpPerDegC = contract.tickGbpPerDegC();
     double payoffGbp =
         switch (contract.type()) {
-          case CALL -> tick * Math.max(0.0, indexHddDegC - strike);
-          case PUT -> tick * Math.max(0.0, strike - indexHddDegC);
-          case SWAP -> tick * (indexHddDegC - strike);
+          case CALL -> tickGbpPerDegC * Math.max(0.0, indexHddDegC - strikeHddDegC);
+          case PUT -> tickGbpPerDegC * Math.max(0.0, strikeHddDegC - indexHddDegC);
+          case SWAP -> tickGbpPerDegC * (indexHddDegC - strikeHddDegC);
         };
     if (contract.capGbp().isPresent()) {
       double capGbp = contract.capGbp().getAsDouble();
+      // Call and put payoffs are >= 0, so the lower bound only ever binds for a swap.
       payoffGbp = Math.max(-capGbp, Math.min(capGbp, payoffGbp));
     }
     return payoffGbp;

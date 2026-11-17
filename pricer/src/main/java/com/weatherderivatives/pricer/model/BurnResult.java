@@ -5,6 +5,9 @@ import java.util.List;
 /**
  * Result of a burn analysis (spec 003).
  *
+ * <p>A plain result holder built by {@link BurnAnalysis#run}; it does not recheck that the
+ * statistics match {@code seasons}.
+ *
  * @param seasons one outcome per season, in year order (stored as an unmodifiable copy)
  * @param burnPriceGbp mean payoff in GBP (undiscounted, no risk loading)
  * @param payoffStdDevGbp sample standard deviation (n − 1) of the payoffs in GBP

@@ -40,10 +40,12 @@ leap season and 151 otherwise, as in spec 001.
 
 ### Settlement index
 `indexHddDegC = Σ dailyHdd` over every UTC day from the first day of `firstMonth` to the
-last day of `lastMonth`. With `dailyHddDecimals = d`, each daily HDD is rounded **half-up
-to d decimals** (on its shortest decimal representation, `BigDecimal.valueOf`) before
-summing, and the total is rounded to d decimals as well, so floating-point noise in the sum
-cannot show.
+last day of `lastMonth`. With `dailyHddDecimals = d`, each daily HDD is computed **exactly
+in decimal**, `max(0, base − (Tmax + Tmin) / 2)` on the shortest decimal forms of the stored
+values (`BigDecimal.valueOf`), then rounded **half-up to d decimals** before summing; the
+exact decimal sum is already at d decimals, so floating-point noise cannot show. (Amended in
+review: rounding the binary double instead turns ties such as 13.65 = 18 − (6.9 + 1.8)/2
+into 13.649999999999999 and rounds about 1 in 10 exact ties down.)
 
 ### Payoffs (long side, GBP)
 
@@ -87,7 +89,7 @@ every January day has the same temperatures within a season):
 - [ ] Given a payoff exactly at the strike (I = K), then call, put and swap all pay 0.0.
 - [ ] Given a Nov–Mar contract, then season 1991 accrues 1991-11-01..1992-03-31 (152 days, leap) and season 1992 accrues 1992-11-01..1993-03-31 (151 days).
 - [ ] Given `dailyHddDecimals = 1` and 31 January days with Tmax 14.0, Tmin 5.86 (daily HDD 8.07), then the index is **251.1** (31 × 8.1); with no rounding it is 250.17 (tolerance 1e-9).
-- [ ] Given `dailyHddDecimals = 1` and a daily HDD of exactly 8.25 (Tmax 10.0, Tmin 9.5), then it rounds half-up to **8.3**.
+- [ ] Given `dailyHddDecimals = 1` and a daily HDD of exactly 8.25 (Tmax 10.0, Tmin 9.5), then it rounds half-up to **8.3**; and with Tmax 6.9, Tmin 1.8 (exact HDD 13.65, not exact in binary) it rounds to **13.7**, so a January index is 424.7.
 - [ ] Given a season with a missing day, then an exception names the missing date and the season (no silent skip).
 - [ ] Given fewer than 2 seasons, or `firstSeasonYear > lastSeasonYear`, then `IllegalArgumentException` (a sample std dev needs 2 values).
 - [ ] Given invalid terms (`firstMonth > lastMonth`, more than 12 months, negative strike, tick ≤ 0, cap ≤ 0, non-finite values, decimals outside 0..4), then construction fails with `IllegalArgumentException` naming the field.
