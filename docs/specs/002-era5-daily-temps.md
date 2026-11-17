@@ -139,7 +139,7 @@ synthetic xarray datasets built in the test, and all paths are under pytest's `t
 - [x] Given start after end, a missing registry file, a raw file missing a variable or on another grid, or a locked target file, then a data-prep error names the problem and path (no traceback; CLI exit 1).
 - [x] Given default options, then raw, processed and pricer folders resolve to `<repo>/data/raw`, `<repo>/data/processed` and `<repo>/data/pricer` regardless of the cwd.
 - [x] Given a registry entry with an invalid key, out-of-range coordinates or a duplicate city, then an error names the entry.
-- [ ] **Contract check (manual, documented in the README):** a file published by data-prep is loaded by the Java `ParquetTemperatureLoader` (spec 001) from `data/pricer` without error, with the same row count and values.
+- [x] **Contract check (manual, documented in the README):** a file published by data-prep is loaded by the Java `ParquetTemperatureLoader` (spec 001) from `data/pricer` without error, with the same row count and values.
 - [x] `ruff check` and `ruff format --check` clean; public functions have docstrings with units; `pytest -q` green.
 
 ## Decisions (approved 2026-11-16)
