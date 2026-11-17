@@ -29,3 +29,6 @@ At base 18.0 they differ exactly on ties: mean 9.75 → 9.8 → HDD 8.2, whereas
   data). Unrounded ERA5 values almost never hit one.
 - The rounded and unrounded paths can differ by ~1e-15 per day before rounding
   (decimal vs binary arithmetic); this never changes a rounded result.
+- Detrended burn (spec 004, 2026-11-18): the trend shift is added to Tmax/Tmin in binary
+  double before settlement rounding. The shift is an estimate far noisier than 1 ulp, so
+  an exact tie after a shift may round either way; this is accepted.

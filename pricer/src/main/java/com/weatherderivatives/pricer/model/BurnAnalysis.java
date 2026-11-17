@@ -50,23 +50,7 @@ public final class BurnAnalysis {
       HddContract contract, DailyTemps temps, int firstSeasonYear, int lastSeasonYear) {
     Objects.requireNonNull(contract, "contract");
     Objects.requireNonNull(temps, "temps");
-    if (firstSeasonYear > lastSeasonYear) {
-      throw new IllegalArgumentException(
-          "firstSeasonYear " + firstSeasonYear + " is after lastSeasonYear " + lastSeasonYear);
-    }
-    long seasonCount = (long) lastSeasonYear - firstSeasonYear + 1;
-    if (seasonCount < MIN_SEASONS) {
-      throw new IllegalArgumentException(
-          "burn analysis needs at least "
-              + MIN_SEASONS
-              + " seasons but got "
-              + seasonCount
-              + " ("
-              + firstSeasonYear
-              + ".."
-              + lastSeasonYear
-              + ")");
-    }
+    checkSeasonRange(firstSeasonYear, lastSeasonYear, MIN_SEASONS, "burn analysis");
 
     List<SeasonOutcome> seasons = new ArrayList<>();
     for (int year = firstSeasonYear; year <= lastSeasonYear; year++) {
@@ -75,24 +59,59 @@ public final class BurnAnalysis {
       try {
         indexHddDegC = SettlementIndex.indexHddDegC(season, temps);
       } catch (TemperatureDataException e) {
-        throw new TemperatureDataException(
-            "season "
-                + year
-                + " ("
-                + season.accrualStart()
-                + ".."
-                + season.accrualEndInclusive()
-                + "): "
-                + e.getMessage(),
-            e);
+        throw seasonError(year, season, e);
       }
       seasons.add(new SeasonOutcome(year, indexHddDegC, HddPayoff.payoffGbp(season, indexHddDegC)));
     }
     return summarise(seasons);
   }
 
+  /**
+   * Checks a season range before any data is read.
+   *
+   * @param analysis name of the analysis, used in the error message
+   * @throws IllegalArgumentException if {@code firstSeasonYear > lastSeasonYear} or the range has
+   *     fewer than {@code minSeasons} seasons
+   */
+  static void checkSeasonRange(
+      int firstSeasonYear, int lastSeasonYear, int minSeasons, String analysis) {
+    if (firstSeasonYear > lastSeasonYear) {
+      throw new IllegalArgumentException(
+          "firstSeasonYear " + firstSeasonYear + " is after lastSeasonYear " + lastSeasonYear);
+    }
+    long seasonCount = (long) lastSeasonYear - firstSeasonYear + 1;
+    if (seasonCount < minSeasons) {
+      throw new IllegalArgumentException(
+          analysis
+              + " needs at least "
+              + minSeasons
+              + " seasons but got "
+              + seasonCount
+              + " ("
+              + firstSeasonYear
+              + ".."
+              + lastSeasonYear
+              + ")");
+    }
+  }
+
+  /** Wraps a missing-day error so it names the season and its accrual period; keeps the cause. */
+  static TemperatureDataException seasonError(
+      int seasonYear, HddContract season, TemperatureDataException cause) {
+    return new TemperatureDataException(
+        "season "
+            + seasonYear
+            + " ("
+            + season.accrualStart()
+            + ".."
+            + season.accrualEndInclusive()
+            + "): "
+            + cause.getMessage(),
+        cause);
+  }
+
   /** Two-pass mean and sample standard deviation, in season order. */
-  private static BurnResult summarise(List<SeasonOutcome> seasons) {
+  static BurnResult summarise(List<SeasonOutcome> seasons) {
     int n = seasons.size();
     double payoffSum = 0.0;
     double indexSum = 0.0;
