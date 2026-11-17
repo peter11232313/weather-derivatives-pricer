@@ -50,7 +50,7 @@ public final class BurnAnalysis {
       HddContract contract, DailyTemps temps, int firstSeasonYear, int lastSeasonYear) {
     Objects.requireNonNull(contract, "contract");
     Objects.requireNonNull(temps, "temps");
-    checkSeasonRange(firstSeasonYear, lastSeasonYear, MIN_SEASONS);
+    checkSeasonRange(firstSeasonYear, lastSeasonYear, MIN_SEASONS, "burn analysis");
 
     List<SeasonOutcome> seasons = new ArrayList<>();
     for (int year = firstSeasonYear; year <= lastSeasonYear; year++) {
@@ -69,10 +69,12 @@ public final class BurnAnalysis {
   /**
    * Checks a season range before any data is read.
    *
+   * @param analysis name of the analysis, used in the error message
    * @throws IllegalArgumentException if {@code firstSeasonYear > lastSeasonYear} or the range has
    *     fewer than {@code minSeasons} seasons
    */
-  static void checkSeasonRange(int firstSeasonYear, int lastSeasonYear, int minSeasons) {
+  static void checkSeasonRange(
+      int firstSeasonYear, int lastSeasonYear, int minSeasons, String analysis) {
     if (firstSeasonYear > lastSeasonYear) {
       throw new IllegalArgumentException(
           "firstSeasonYear " + firstSeasonYear + " is after lastSeasonYear " + lastSeasonYear);
@@ -80,7 +82,8 @@ public final class BurnAnalysis {
     long seasonCount = (long) lastSeasonYear - firstSeasonYear + 1;
     if (seasonCount < minSeasons) {
       throw new IllegalArgumentException(
-          "burn analysis needs at least "
+          analysis
+              + " needs at least "
               + minSeasons
               + " seasons but got "
               + seasonCount

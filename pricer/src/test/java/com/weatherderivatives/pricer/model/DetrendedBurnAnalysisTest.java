@@ -609,5 +609,62 @@ class DetrendedBurnAnalysisTest {
         () -> DetrendedBurnAnalysis.run(januaryCall(210.0), null, FIRST, LAST, TARGET));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Review follow-ups
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void slopeStdErr_noiseExample_is0_110() {
+    // residuals = noise (+1,-1,-1,+1,0,0,+1,-1,-1,+1) -> SS 8; SE = sqrt(8 / (n-2) / Sxx)
+    // = sqrt(1 / 82.5) = 0.11009637651263607
+    DetrendedBurnResult r =
+        DetrendedBurnAnalysis.run(
+            januaryCall(200.0), januaryTemps(noiseMeans(), 4.0), FIRST, LAST, TARGET);
+    assertEquals(Math.sqrt(1.0 / 82.5), r.slopeStdErrDegCPerYear(), TOL);
+  }
+
+  @Test
+  void slopeStdErr_exactTrend_isZero() {
+    DetrendedBurnResult r =
+        DetrendedBurnAnalysis.run(
+            januaryCall(210.0), januaryTemps(exactTrendMeans(), 4.0), FIRST, LAST, TARGET);
+    assertEquals(0.0, r.slopeStdErrDegCPerYear(), 1e-9);
+  }
+
+  @Test
+  void flatHistory_targetBeforeSeasons_shiftIsPositiveZero() {
+    // slope +0.0 times a negative year gap must be reported as +0.0, not -0.0
+    double[] flat = new double[10];
+    Arrays.fill(flat, 9.78);
+    DetrendedBurnResult r =
+        DetrendedBurnAnalysis.run(januaryCall(240.0), januaryTemps(flat, 4.0), FIRST, LAST, 1900);
+    for (SeasonTrend t : r.seasons()) {
+      assertEquals(0L, Double.doubleToRawLongBits(t.shiftDegC()), () -> "season " + t);
+    }
+  }
+
+  @Test
+  void hugeSeasonRange_failsOnDataNotMemory() {
+    // the range passes the minimum check; it must fail on the first missing day, not allocate
+    TemperatureDataException ex =
+        assertThrows(
+            TemperatureDataException.class,
+            () ->
+                DetrendedBurnAnalysis.run(
+                    januaryCall(240.0), DailyTemps.of(List.of()), 0, Integer.MAX_VALUE, 2011));
+    assertMessageContains(ex, "season 0");
+  }
+
+  @Test
+  void tooFewSeasons_messageNamesDetrendedBurn() {
+    IllegalArgumentException ex =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                DetrendedBurnAnalysis.run(
+                    januaryCall(240.0), DailyTemps.of(List.of()), 2001, 2009, 2011));
+    assertMessageContains(ex, "detrended");
+  }
+
   // AC11 (unit names, Javadoc) is review-only and has no test.
 }

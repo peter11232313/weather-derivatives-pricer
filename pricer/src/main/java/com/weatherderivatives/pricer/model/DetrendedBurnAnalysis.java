@@ -25,6 +25,13 @@ import java.util.Objects;
  * a shift that lifts days above the base gives 0, never a negative contribution. The shift is added
  * in binary double before any settlement rounding (ADR 0004), so an exact tie after a shift may
  * round either way; the trend estimate is far less precise than that.
+ *
+ * <p>Look-ahead: for a back-test the window must end before {@code targetSeasonYear}, otherwise the
+ * priced season feeds both the trend and the burn. Normally {@code targetSeasonYear =
+ * lastSeasonYear + 1} (or {@code + 2} if the latest season is incomplete). The fitted slope is
+ * uncertain ({@link DetrendedBurnResult#slopeStdErrDegCPerYear()}); with few seasons the shift of
+ * the oldest seasons can be dominated by noise, and the burn's standard deviation does not include
+ * that trend uncertainty.
  */
 public final class DetrendedBurnAnalysis {
 
@@ -57,18 +64,24 @@ public final class DetrendedBurnAnalysis {
       int targetSeasonYear) {
     Objects.requireNonNull(contract, "contract");
     Objects.requireNonNull(temps, "temps");
-    BurnAnalysis.checkSeasonRange(firstSeasonYear, lastSeasonYear, MIN_SEASONS);
+    BurnAnalysis.checkSeasonRange(
+        firstSeasonYear, lastSeasonYear, MIN_SEASONS, "detrended burn analysis (trend fit)");
 
-    int n = lastSeasonYear - firstSeasonYear + 1;
+    // Read every season first. The list grows with the data, so a huge range fails on its first
+    // missing day instead of allocating up front.
+    List<Double> means = new ArrayList<>();
+    for (long year = firstSeasonYear; year <= lastSeasonYear; year++) {
+      HddContract season = contract.forSeason((int) year);
+      try {
+        means.add(seasonMeanTempC(season, temps));
+      } catch (TemperatureDataException e) {
+        throw BurnAnalysis.seasonError((int) year, season, e);
+      }
+    }
+    int n = means.size();
     double[] seasonMeansC = new double[n];
     for (int k = 0; k < n; k++) {
-      int year = firstSeasonYear + k;
-      HddContract season = contract.forSeason(year);
-      try {
-        seasonMeansC[k] = seasonMeanTempC(season, temps);
-      } catch (TemperatureDataException e) {
-        throw BurnAnalysis.seasonError(year, season, e);
-      }
+      seasonMeansC[k] = means.get(k);
     }
     double slopeDegCPerYear = olsSlopeDegCPerYear(firstSeasonYear, seasonMeansC);
 
@@ -77,8 +90,14 @@ public final class DetrendedBurnAnalysis {
     for (int k = 0; k < n; k++) {
       int year = firstSeasonYear + k;
       HddContract season = contract.forSeason(year);
-      double shiftDegC = slopeDegCPerYear * (double) ((long) targetSeasonYear - year);
-      double indexHddDegC = SettlementIndex.indexHddDegC(season, shifted(season, temps, shiftDegC));
+      // + 0.0 turns -0.0 (zero slope, target before the season) into +0.0
+      double shiftDegC = slopeDegCPerYear * (double) ((long) targetSeasonYear - year) + 0.0;
+      double indexHddDegC;
+      try {
+        indexHddDegC = SettlementIndex.indexHddDegC(season, shifted(season, temps, shiftDegC));
+      } catch (TemperatureDataException e) {
+        throw BurnAnalysis.seasonError(year, season, e); // e.g. a shift overflowing to infinity
+      }
       outcomes.add(
           new SeasonOutcome(year, indexHddDegC, HddPayoff.payoffGbp(season, indexHddDegC)));
       trends.add(new SeasonTrend(year, seasonMeansC[k], shiftDegC));
