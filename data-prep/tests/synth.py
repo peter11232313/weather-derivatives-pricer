@@ -212,17 +212,57 @@ class FakeCdsClient:
     Records every ``retrieve(name, request, target)`` call and then, depending on
     ``mode``:
 
-    - ``"netcdf"``: writes a small valid netCDF to ``target`` (an ``lsm`` dataset for a
+    - ``"netcdf"``: writes a valid netCDF to ``target`` (an ``lsm`` dataset for a
       land-sea-mask request, else ``mx2t``/``mn2t``);
     - ``"raise"``: raises ``RuntimeError`` without writing;
     - ``"partial_then_raise"``: writes a few bytes to ``target`` and then raises;
-    - ``"zip"``: writes a real zip archive (starts with ``b"PK\\x03\\x04"``) to ``target``.
+    - ``"zip"``: writes a real zip archive (starts with ``b"PK\\x03\\x04"``) to ``target``;
+    - ``"garbage"``: writes an HTML error page;
+    - ``"zip_split"``: one netCDF per variable, zipped together (as the new CDS does);
+    - ``"zip_corrupt"`` / ``"zip_misaligned"``: a damaged zip / parts on shifted time axes;
+    - ``"netcdf_missing_var"``: netCDF holding ``mx2t`` only.
+
+    Served data (unless ``dataset`` overrides it for every request): for a request with a
+    ``year`` key, ``mx2t``/``mn2t`` for every hour of the requested years x months x days
+    x times (a 3-year request is served 3 complete years, a one-step request one step),
+    CDS-like: ``valid_time``, latitude stored N->S, a scalar ``number`` and a per-time
+    ``expver``, float32 in K (``cds_era5``). Values depend only on the hour stamp and the
+    grid cell, so the same hour is served identically whatever the request. A request
+    without ``year`` gets the original two-hour 2024 dataset.
+
+    Knobs:
+
+    - ``missing_hours``: time stamps dropped from every temperature response;
+    - ``pad_hours``: that many extra hours added before the first and after the last
+      served hour of a temperature response;
+    - ``fail_on_calls``: 1-based indices of ``retrieve`` calls (counting every call,
+      land-sea mask included) that write a few bytes to ``target`` and then raise;
+    - ``grid_from_area``: serve the grid spanned by the request's ``area`` (N, W, S, E on
+      0.25-degree lines, i.e. the station box) instead of the default 2x2 London corner;
+      needed when the downloaded files are processed by the pipeline.
+
+    ``calls`` records ``(name, request, target)``; ``served`` holds the dataset served by
+    each call (``None`` when the call raised or served no dataset).
     """
 
-    def __init__(self, mode: str = "netcdf", dataset: xr.Dataset | None = None) -> None:
+    def __init__(
+        self,
+        mode: str = "netcdf",
+        dataset: xr.Dataset | None = None,
+        *,
+        missing_hours: Iterable[Any] = (),
+        pad_hours: int = 0,
+        fail_on_calls: Iterable[int] = (),
+        grid_from_area: bool = False,
+    ) -> None:
         self.mode = mode
         self.dataset = dataset
+        self.missing_hours = pd.DatetimeIndex(list(missing_hours))
+        self.pad_hours = pad_hours
+        self.fail_on_calls = set(fail_on_calls)
+        self.grid_from_area = grid_from_area
         self.calls: list[tuple[str, dict[str, Any], str]] = []
+        self.served: list[xr.Dataset | None] = []
 
     @property
     def requests(self) -> list[dict[str, Any]]:
@@ -230,7 +270,11 @@ class FakeCdsClient:
 
     def retrieve(self, name: str, request: dict[str, Any], target: Any) -> None:
         self.calls.append((name, copy.deepcopy(request), str(target)))
+        self.served.append(None)
         target_path = Path(target)
+        if len(self.calls) in self.fail_on_calls:
+            target_path.write_bytes(b"\x89HDF\r\n\x1a\npartial")
+            raise RuntimeError(f"simulated CDS failure on call {len(self.calls)}")
         if self.mode == "raise":
             raise RuntimeError("simulated CDS failure")
         if self.mode == "partial_then_raise":
@@ -243,8 +287,9 @@ class FakeCdsClient:
         if self.mode == "garbage":
             target_path.write_bytes(b"<html>Service temporarily unavailable</html>")
             return
+        ds = self._dataset_for(request)
+        self.served[-1] = ds
         if self.mode in ("zip_corrupt", "zip_misaligned"):
-            ds = self._dataset_for(request)
             time_dim = "valid_time" if "valid_time" in ds.dims else "time"
             parts = [ds[["mx2t"]], ds[["mn2t"]]]
             if self.mode == "zip_misaligned":
@@ -272,11 +317,10 @@ class FakeCdsClient:
                 raw[data_start + info.compress_size // 2] ^= 0xFF
                 target_path.write_bytes(bytes(raw))
             return
-        if self.mode in ("zip_split", "netcdf_missing_var"):
-            ds = self._dataset_for(request)
-            if self.mode == "netcdf_missing_var":
-                ds[["mx2t"]].to_netcdf(target_path)
-                return
+        if self.mode == "netcdf_missing_var":
+            ds[["mx2t"]].to_netcdf(target_path)
+            return
+        if self.mode == "zip_split":
             # As the new CDS does: one netCDF per GRIB stepType, zipped together.
             parts = [ds[[name]] for name in ds.data_vars]
             with zipfile.ZipFile(target_path, "w") as zf:
@@ -286,20 +330,133 @@ class FakeCdsClient:
                     zf.write(tmp, f"data_stream-oper_stepType-{i}.nc")
                     tmp.unlink()
             return
-        self._dataset_for(request).to_netcdf(target_path)
+        ds.to_netcdf(target_path)
+
+    def temperature_years(self) -> list[list[str]]:
+        """``year`` lists of the full-period temperature requests (not lsm, not one-step)."""
+        return [
+            as_list(r["year"])
+            for r in self.requests
+            if not is_lsm_request(r) and not is_single_step_request(r)
+        ]
+
+    def _grid(self, request: dict[str, Any]) -> tuple[list[float], list[float]]:
+        if self.grid_from_area and "area" in request:
+            north, west, south, east = (float(x) for x in request["area"])
+            return grid_lines(south, north), grid_lines(west, east)
+        return LONDON_LATS[:2], LONDON_LONS[:2]
 
     def _dataset_for(self, request: dict[str, Any]) -> xr.Dataset:
         if self.dataset is not None:
             return self.dataset
+        lats, lons = self._grid(request)
         if is_lsm_request(request):
-            return lsm_raw_dataset(make_lsm(LONDON_LATS[:2], LONDON_LONS[:2]))
-        return make_era5(
-            hours("2024-01-01T00:00", "2024-01-01T01:00"),
-            LONDON_LATS[:2],
-            LONDON_LONS[:2],
-            time_name="valid_time",
-            lat_descending=True,
+            return lsm_raw_dataset(make_lsm(lats, lons))
+        if "year" not in request:
+            return make_era5(
+                hours("2024-01-01T00:00", "2024-01-01T01:00"),
+                LONDON_LATS[:2],
+                LONDON_LONS[:2],
+                time_name="valid_time",
+                lat_descending=True,
+            )
+        times = requested_hours(request)
+        if self.pad_hours and len(times):
+            one = pd.Timedelta(hours=1)
+            before = pd.date_range(end=times[0] - one, periods=self.pad_hours, freq="h")
+            after = pd.date_range(start=times[-1] + one, periods=self.pad_hours, freq="h")
+            times = before.append(times).append(after)
+        if len(self.missing_hours):
+            times = times[~times.isin(self.missing_hours)]
+        return cds_era5(times, lats, lons)
+
+
+def grid_lines(low: float, high: float) -> list[float]:
+    """0.25-degree grid lines from ``low`` to ``high`` inclusive (degrees)."""
+    n = round((high - low) / 0.25)
+    return [low + 0.25 * i for i in range(n + 1)]
+
+
+def requested_hours(request: dict[str, Any]) -> pd.DatetimeIndex:
+    """Every valid hour of a CDS request's years x months x days x times, sorted."""
+    years = sorted(int(y) for y in as_list(request["year"]))
+    months = {int(m) for m in as_list(request["month"])}
+    days = {int(d) for d in as_list(request["day"])}
+    times = {int(t.split(":")[0]) for t in as_list(request["time"])}
+    out = pd.DatetimeIndex([])
+    for year in years:
+        idx = pd.date_range(f"{year}-01-01T00:00", f"{year}-12-31T23:00", freq="h")
+        keep = idx.month.isin(months) & idx.day.isin(days) & idx.hour.isin(times)
+        out = out.append(idx[keep])
+    return out
+
+
+def _hour_number(times: Sequence[Any]) -> Any:
+    """Whole hours since 1970-01-01 00:00 UTC, shape (time, 1, 1)."""
+    delta = pd.DatetimeIndex(times) - pd.Timestamp("1970-01-01")
+    return np.asarray(delta // pd.Timedelta(hours=1), dtype=np.int64)[:, None, None]
+
+
+def hourly_mx2t_k(times: Sequence[Any], lats: Sequence[float], lons: Sequence[float]) -> Any:
+    """Deterministic ``mx2t`` in K, shape (time, lat, lon), lats/lons in the given order.
+
+    Depends only on the hour stamp and the cell's coordinates.
+    """
+    h = _hour_number(times)
+    lat = np.asarray(lats, dtype=np.float64)[None, :, None]
+    lon = np.asarray(lons, dtype=np.float64)[None, None, :]
+    return 270.0 + (h % 997) * 0.03 + (h % 24) * 0.25 + 4.0 * (lat - 51.0) + 2.0 * lon
+
+
+def hourly_mn2t_k(times: Sequence[Any], lats: Sequence[float], lons: Sequence[float]) -> Any:
+    """Deterministic ``mn2t`` in K, 3..6 K below ``hourly_mx2t_k`` for the same hour/cell."""
+    return hourly_mx2t_k(times, lats, lons) - 3.0 - (_hour_number(times) % 7) * 0.5
+
+
+def cds_era5(times: Sequence[Any], lats: Sequence[float], lons: Sequence[float]) -> xr.Dataset:
+    """A CDS-like ``mx2t``/``mn2t`` dataset for exactly ``times`` (float32, K).
+
+    ``valid_time`` dimension, latitude stored N->S, scalar ``number``, a per-time
+    ``expver`` coordinate and variable/global attributes as the new CDS writes them.
+    """
+    times = pd.DatetimeIndex(times)
+    lats_desc = sorted((float(x) for x in lats), reverse=True)
+    lons_asc = sorted(float(x) for x in lons)
+    dims = ("valid_time", "latitude", "longitude")
+
+    def build(values: Any, short: str, long: str) -> xr.DataArray:
+        return xr.DataArray(
+            np.asarray(values, dtype=np.float64).astype(np.float32),
+            dims=dims,
+            attrs={"units": "K", "long_name": long, "GRIB_shortName": short},
         )
+
+    return xr.Dataset(
+        {
+            "mx2t": build(
+                hourly_mx2t_k(times, lats_desc, lons_asc),
+                "mx2t",
+                "Maximum temperature at 2 metres since previous post-processing",
+            ),
+            "mn2t": build(
+                hourly_mn2t_k(times, lats_desc, lons_asc),
+                "mn2t",
+                "Minimum temperature at 2 metres since previous post-processing",
+            ),
+        },
+        coords={
+            "valid_time": times.values.astype("datetime64[ns]"),
+            "latitude": ("latitude", np.asarray(lats_desc), {"units": "degrees_north"}),
+            "longitude": ("longitude", np.asarray(lons_asc), {"units": "degrees_east"}),
+            "number": 0,
+            "expver": ("valid_time", np.full(len(times), "0001")),
+        },
+        attrs={
+            "GRIB_centre": "ecmf",
+            "Conventions": "CF-1.7",
+            "institution": "European Centre for Medium-Range Weather Forecasts",
+        },
+    )
 
 
 # --------------------------------------------------------------------------- raw writers

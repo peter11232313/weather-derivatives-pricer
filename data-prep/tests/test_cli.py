@@ -6,6 +6,7 @@ from synth import (
     KELVIN,
     LONDON_LATS,
     LONDON_LONS,
+    FakeCdsClient,
     hours,
     make_era5,
     make_lsm,
@@ -147,3 +148,76 @@ def test_cli_unknown_city_exits_1(registry, raw_files, processed_dir, capsys):
 def test_cli_bad_arguments_exit_2(argv, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run_exit_code(argv) == 2
+
+
+# ------------------------------------------- spec 002 amendment A: --years-per-request
+
+
+def chunked_args(command, registry, tmp_path, start, end, *extra):
+    argv = [
+        command,
+        "--city",
+        "london",
+        "--start",
+        start,
+        "--end",
+        end,
+        "--registry",
+        str(registry),
+        "--raw-dir",
+        str(tmp_path / "raw"),
+    ]
+    if command == "build":
+        argv += [
+            "--processed-dir",
+            str(tmp_path / "processed"),
+            "--pricer-dir",
+            str(tmp_path / "pricer"),
+        ]
+    return argv + list(extra)
+
+
+@pytest.mark.parametrize("command", ["download", "build"])
+@pytest.mark.parametrize("value", ["0", "4", "x", "-1"])
+def test_a8_years_per_request_outside_1_to_3_exits_2_naming_the_option(
+    command, value, registry, tmp_path, monkeypatch, capsys
+):
+    def no_client():
+        raise AssertionError("no download may start on bad arguments")
+
+    monkeypatch.setattr("dataprep.cli._cds_client", no_client)
+    argv = chunked_args(
+        command, registry, tmp_path, "1993-01-01", "1993-12-31", "--years-per-request", value
+    )
+    assert run_exit_code(argv) == 2
+    err = capsys.readouterr().err
+    assert "--years-per-request" in err
+    assert "must be an integer from 1 to 3" in err
+
+
+def test_a8_download_years_per_request_2_chunks_requests_in_twos(registry, tmp_path, monkeypatch):
+    client = FakeCdsClient()
+    monkeypatch.setattr("dataprep.cli._cds_client", lambda: client)
+    argv = chunked_args(
+        "download", registry, tmp_path, "1993-01-01", "1996-12-31", "--years-per-request", "2"
+    )
+    assert main(argv) == 0
+    assert client.temperature_years() == [["1993", "1994"], ["1995", "1996"]]
+
+
+def test_a8_download_default_years_per_request_is_3(registry, tmp_path, monkeypatch):
+    client = FakeCdsClient()
+    monkeypatch.setattr("dataprep.cli._cds_client", lambda: client)
+    assert main(chunked_args("download", registry, tmp_path, "1993-01-01", "1996-12-31")) == 0
+    assert client.temperature_years() == [["1993", "1994", "1995"], ["1996"]]
+
+
+def test_a8_build_years_per_request_2_chunks_requests_in_twos(registry, tmp_path, monkeypatch):
+    client = FakeCdsClient(grid_from_area=True)  # processed: needs the station's grid
+    monkeypatch.setattr("dataprep.cli._cds_client", lambda: client)
+    argv = chunked_args(
+        "build", registry, tmp_path, "1995-06-01", "1998-01-31", "--years-per-request", "2"
+    )
+    assert main(argv) == 0
+    assert client.temperature_years() == [["1995", "1996"], ["1997", "1998"]]
+    assert (tmp_path / "pricer" / "london.parquet").is_file()
