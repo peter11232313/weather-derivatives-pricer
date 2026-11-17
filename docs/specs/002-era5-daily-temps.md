@@ -203,3 +203,11 @@ Out: retries, parallel requests, other datasets or mirrors.
    `mn2t` = 17,568). Revisit only if the live 3-year test request is rejected.
 2. **Partial chunks**: complete years are kept; only incomplete years are reported and
    re-requested on the next run.
+3. **Completeness applies to every year file**, single-year requests included: a range
+   ending in the current, unfinished year now fails at download with a clear error naming
+   the first missing hour (was: downloaded unchecked).
+4. **Incomplete year → carry on**: later chunks are still downloaded; one `DownloadError`
+   naming every incomplete year is raised at the end. A failed request (rejected, network)
+   still stops at once.
+5. **Year files are rewritten by xarray** (not the raw response bytes); equal values,
+   coordinates, attributes and stored dtype are required.

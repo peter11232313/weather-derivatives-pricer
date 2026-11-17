@@ -126,6 +126,10 @@ Contents
 | 5c.1 | Real pricing is blocked on data: ~3 h queue per request, one request per year, parallel requests rejected. | Ask for up to N consecutive missing years per request and split the result back into year files; processing unchanged. |
 | 5c.2 | How many years per request? The ~60,000-item cap is old and unconfirmed. | **Default 3, maximum 3** (owner OK; 3 × 17,568 items fits). A live 3-year test request was written to match the code's request exactly, so Copernicus's cache may serve it again when the feature runs. |
 | 5c.3 | One year of a multi-year response is incomplete: discard the chunk or keep the complete years? | **Keep the complete years** (owner's choice); report and re-request only the incomplete year. |
+| 5c.4 | Planner found a conflict: year files were never checked for completeness, so a range ending in the current, unfinished year downloaded fine; the new check would make it fail. | **Check every year** (owner OK): an unfinished year fails with a clear error naming the first missing hour. Our 1991–2024 range is unaffected. |
+| 5c.5 | Incomplete year in a chunk: stop at once or continue? | **Continue** with later chunks and raise one error at the end (each stop would waste ~3 h queue slots); a failed request still stops at once. |
+| 5c.6 | Year files are now rewritten by xarray instead of saved as the raw response bytes. | Accepted: tests require equal values, coordinates, attributes and stored dtype (no silent float32/int16 repacking). Chunk-size encodings are dropped on write so 3-year chunking cannot break a 1-year file. |
+| 5c.7 | The scratchpad test script calls `_request(year=0)`, which the new `years=` signature breaks. | Acceptable for a one-off script; run it before the change lands, or adapt it. |
 
 ## 6. Workflow lessons
 
