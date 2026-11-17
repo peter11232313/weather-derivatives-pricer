@@ -110,6 +110,13 @@ Contents
 | 5b.5 | Planner: add the trend shift in binary double or in exact decimal? After a shift, a 0.1 °C rounding tie could go either way. | **Double** (owner OK'd the plan): the shift is a statistical estimate far noisier than 1 ulp, so decimal would be false precision. Noted in ADR 0004. |
 | 5b.6 | Planner: expose the trend intercept or R²? Wire into `/price`? | **No** for now: not in the spec; there is no REST layer yet. |
 | 5b.7 | A flat history must give exactly the raw burn, but a naive OLS (`m − mean(m)`) can leave a 1-ulp slope. | Slope numerator summed as `x·(m_high − m_low)` over symmetric year pairs, so equal season means give a slope of exactly +0.0. |
+| 5b.8 | The spec's rounding example (means 10.04 + 0.1k) could not tell "round after shift" from "round raw HDD, then shift". | Test-writer added a 0.13 °C/yr case: correct 207.7 vs wrong-order 205.53. |
+| 5b.9 | Plan had two implementation commits (trend fit, then shifted burn). | One commit: the code was small; noted rather than split artificially. |
+| 5b.10 | Quant review: at 10 seasons the slope's standard error (~0.17 °C/yr for σ≈1.5 °C) is several times the real warming signal, and it was not reported. | Added `slopeStdErrDegCPerYear()` (known answer 0.110 for the noise example); Javadoc says the burn std dev excludes trend uncertainty and uses n − 1. |
+| 5b.11 | Look-ahead is worse than in spec 003: the priced season would feed both the trend and the burn. | Javadoc and README: end the window before the target; normally target = last + 1. |
+| 5b.12 | Code review: a huge season range (e.g. 0..Integer.MAX_VALUE) allocated an array up front (OOM / negative size) before reading data. | Season means collected as they are read, so it fails on the first missing day; test added. |
+| 5b.13 | Shift reported as −0.0 for a zero slope with a target before the season; overflowing shifts lost the season context; the range message said "burn analysis". | `+ 0.0` normalisation; second pass wraps errors with the season; message names "detrended burn analysis (trend fit)". The unused `firstSeasonYear` parameter of the OLS helper was kept (would mean editing tests for no behaviour change). |
+| 5b.14 | Desk concerns raised, deferred: the trend is fitted on the contract months only (noisy for one-month contracts); a uniform shift moves only the mean, not the cold tail; far-future targets scale the shift linearly. | Recorded in PROGRESS.md open questions for a later spec. |
 
 ## 6. Workflow lessons
 

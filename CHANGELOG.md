@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- Detrended burn analysis (spec 004): `DetrendedBurnAnalysis` → `DetrendedBurnResult`
+  (OLS trend of season mean temperature, daily Tmax/Tmin shifted to a target season,
+  settlement and payoffs recomputed; slope, slope standard error, per-season mean and
+  shift). At least 10 seasons.
 - HDD contract payoffs and burn analysis (spec 003): `HddContract` (call/put/swap, whole
   calendar months, strike, tick, cap, opt-in half-up daily HDD rounding in exact decimal,
   ADR 0004), `SettlementIndex`, `HddPayoff`, `BurnAnalysis` → `BurnResult` (per-season

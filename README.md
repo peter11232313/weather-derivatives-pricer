@@ -11,6 +11,7 @@ Prices HDD/CDD weather derivatives on European cities using ERA5 temperatures.
 | [001](docs/specs/001-hdd-index.md) | HDD index engine + Parquet loader | done |
 | [002](docs/specs/002-era5-daily-temps.md) | ERA5 → daily station temperatures (data-prep) | done |
 | [003](docs/specs/003-burn-analysis.md) | HDD contract payoffs + burn analysis | done |
+| [004](docs/specs/004-detrended-burn.md) | Detrended burn analysis | done |
 
 See [docs/PROGRESS.md](docs/PROGRESS.md) for what's next.
 
@@ -115,9 +116,23 @@ BurnResult r = BurnAnalysis.run(call, temps, 1991, 2023); // season 1991 = winte
 r.burnPriceGbp(); r.payoffStdDevGbp(); r.burnPriceStdErrorGbp(); r.seasons();
 ```
 
-The burn price is the undiscounted mean payoff. Not yet included: detrending (under
-warming the raw burn overstates HDD), discounting, risk loading; leap seasons accrue
-29 February. Rounding: [ADR 0004](docs/decisions/0004-settlement-rounding-daily-hdd.md).
+The burn price is the undiscounted mean payoff. Not yet included: discounting, risk
+loading; leap seasons accrue 29 February. Rounding:
+[ADR 0004](docs/decisions/0004-settlement-rounding-daily-hdd.md).
+
+## Detrended burn (spec 004)
+Under warming the raw burn overstates HDD. `DetrendedBurnAnalysis` fits a linear trend
+(OLS) to each season's mean temperature over the contract months, shifts every day's
+Tmax/Tmin to the target season's climate, then prices as above (at least 10 seasons):
+
+```java
+DetrendedBurnResult d = DetrendedBurnAnalysis.run(call, temps, 1991, 2023, 2024);
+d.burn().burnPriceGbp(); d.slopeDegCPerYear(); d.slopeStdErrDegCPerYear(); d.seasons();
+```
+
+For a back-test, end the window before the target season. Seasons are labelled by the
+year of their first accrual day (Nov–Mar 1991 = winter 1991/92), for both the trend and
+the shift. With few seasons the slope is noisy; check `slopeStdErrDegCPerYear()`.
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`

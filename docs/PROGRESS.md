@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 2026-11-17_
+_Last updated: 2026-11-18_
 
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
@@ -17,10 +17,15 @@ _Last updated: 2026-11-17_
   - Reviewed by `code-reviewer` and `quant-reviewer`. Quant blocker fixed: rounded daily HDD is now computed in exact decimal (rounding the binary double turned ~10% of 0.1 °C ties down). Spec amended and **user-approved 2026-11-17**; [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md).
   - Smoke run on real London data: January call K=400, tick £20, seasons 1991–1992 → burn £764.05 (unrounded) / £762.00 (1 dp); matches an independent Python calculation.
 
+- **Spec 004 — detrended burn**: branch `feat/004-detrended-burn`, ready for PR.
+  - `DetrendedBurnAnalysis`, `DetrendedBurnResult`, `SeasonTrend`; `BurnAnalysis` shares checks/statistics.
+  - 195 Java tests green; spotless + javadoc clean; 11/11 criteria ticked.
+  - Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; SHOULDs/NITs fixed (slope standard error added, look-ahead note, -0.0 shift, huge ranges fail on data).
+
 ## Next
 1. **Finish the 1991–2024 download** in the user's own terminal, **one command at a time** (Copernicus rejects parallel requests; ~3 h queue per year; keep the PC awake): `python -m dataprep build --city london --start 1991-01-01 --end 2024-12-31` → expect 12,419 rows. Option: spec 002 amendment for multi-year requests (~3 years per request) to cut the queue waits.
 2. Real burn on 1991–2023 London seasons once the data is published.
-3. Next model spec: detrending (warming trend) for the burn; consider leap-day policy and look-ahead guard.
+3. Real detrended burn on London once 1991–2023 is published (needs ≥ 10 seasons).
 4. Spec 001 amendment: physical range check (−90..60 °C) in the Java loader (decided: Java only).
 5. Later: CDD index, collars/strips, index-distribution and OU models, REST endpoint.
 
@@ -28,6 +33,7 @@ _Last updated: 2026-11-17_
 **Pricing conventions (from quant review, deferred)**
 - Some term sheets round the daily mean temperature rather than daily HDD; add a `RoundingTarget` option when a contract needs it (ADR 0004).
 - Leap-day policy for historical seasons (keep 29 Feb vs drop / match target day count).
+- Detrending (quant review of spec 004): fit the trend on a longer/wider series than the contract months; a uniform shift moves only the mean, not the cold tail; guard far-future targets.
 
 **Repo housekeeping**
 - Three subagents (`code-reviewer`, `planner`, `test-writer`) live in `~/.claude/agents/`, not the repo; move them to `.claude/agents/` so collaborators get them?
