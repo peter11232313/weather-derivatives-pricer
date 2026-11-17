@@ -162,3 +162,44 @@ published files < 1 MB each, Python environment ~300–450 MB.
 
 ## Open questions
 None.
+
+---
+
+## Amendment A — multi-year download requests (drafted 2026-11-18)
+
+### Why
+Each Copernicus request waits ~3 h in the queue whatever its size, and parallel requests
+are rejected ("max allowed requests"). One request per year makes 1991–2024 take days.
+Asking for several consecutive years per request cuts the number of queue waits.
+
+### Scope
+In:
+- `download` groups the **missing** years of a range into runs of consecutive years and
+  sends one request per chunk of up to `yearsPerRequest` years (default **3**). Chunks
+  start at the first missing year (missing 1993..2023 → 1993–95, 1996–98, …, 2023).
+- The request is today's year request with a list of years; every other key (variables,
+  area, months, days, times, formats) is identical, so Copernicus's cache can serve a
+  repeated request.
+- The merged result is **split into one year file per year**, `era5_<city>_<Y>.nc`, each
+  holding exactly that year's hours, written with temp file + atomic rename. Processing,
+  file names and "skip what exists" are unchanged.
+- CLI: `--years-per-request N` on `download` and `build`.
+
+Out: retries, parallel requests, other datasets or mirrors.
+
+### Acceptance criteria
+- [ ] Given years 1993..2001 missing and `yearsPerRequest = 3`, then exactly three requests are sent with `year` = [1993, 1994, 1995], [1996, 1997, 1998], [1999, 2000, 2001], and every other request key equals the single-year request's.
+- [ ] Given a 3-year response, then three year files are written, each with every hour of its year (8,760, or 8,784 in a leap year) and values equal to the corresponding hours of the response.
+- [ ] Given 1994 already present and 1993, 1995, 1996 missing, then the requests are [1993] and [1995, 1996] (only consecutive missing years are combined; existing files are never re-requested).
+- [ ] Given `yearsPerRequest = 1`, then the requests are exactly today's single-year requests.
+- [ ] Given a 3-year response in which one year lacks an hour, then the two complete years are written as year files, the incomplete year is **not** written, and a `DownloadError` names the incomplete year; a rerun requests only the missing year.
+- [ ] Given a response containing hours outside the requested years, then they are ignored (never written to another year's file).
+- [ ] Given a failed chunk, then no temporary files remain and earlier completed chunks are kept.
+- [ ] Given `--years-per-request` below 1 or above the maximum, then the CLI exits 2 with a message naming the option.
+- [ ] The final-year next 00:00 step and the land-sea mask requests are unchanged.
+
+### Decisions (2026-11-18)
+1. **Chunk size**: default 3, maximum 3 (published cap ~60,000 items; one year of `mx2t` +
+   `mn2t` = 17,568). Revisit only if the live 3-year test request is rejected.
+2. **Partial chunks**: complete years are kept; only incomplete years are reported and
+   re-requested on the next run.

@@ -17,7 +17,7 @@ _Last updated: 2026-11-18_
   - Reviewed by `code-reviewer` and `quant-reviewer`. Quant blocker fixed: rounded daily HDD is now computed in exact decimal (rounding the binary double turned ~10% of 0.1 °C ties down). Spec amended and **user-approved 2026-11-17**; [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md).
   - Smoke run on real London data: January call K=400, tick £20, seasons 1991–1992 → burn £764.05 (unrounded) / £762.00 (1 dp); matches an independent Python calculation.
 
-- **Spec 004 — detrended burn**: branch `feat/004-detrended-burn`, ready for PR.
+- **Spec 004 — detrended burn**: merged to `main` via [PR #7](https://github.com/peter11232313/weather-derivatives-pricer/pull/7) (`70dcedf`); CI green.
   - `DetrendedBurnAnalysis`, `DetrendedBurnResult`, `SeasonTrend`; `BurnAnalysis` shares checks/statistics.
   - 195 Java tests green; spotless + javadoc clean; 11/11 criteria ticked.
   - Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; SHOULDs/NITs fixed (slope standard error added, look-ahead note, -0.0 shift, huge ranges fail on data).
