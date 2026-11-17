@@ -99,6 +99,15 @@ Contents
 | 5.11 | Does it work on real data? | January call, K=400, tick £20, seasons 1991–1992: burn **£764.05** (full precision) / **£762.00** (1 dp), matching an independent Python calculation. |
 | 5.12 | Shipping. | Merged via PR #5 (`0e6f861`), CI green; 158 Java tests. |
 
+## 5b. Spec 004 — detrended burn
+
+| # | Problem / confusion | Resolution |
+| --- | --- | --- |
+| 5b.1 | Detrend daily temperatures or the seasonal HDD index? | **Daily temperatures** (shift Tmax and Tmin). HDD is `max(0, base − T)`: a linear trend on the index can extrapolate below zero, whereas shifted temperatures above the base correctly give 0. |
+| 5b.2 | Fit the trend to each season's accrual-period mean or to the calendar-year mean? | **Accrual-period mean**: captures warming in the contract's own months (e.g. winter), at the cost of noisier points. |
+| 5b.3 | Minimum seasons for a trend? | **10** (owner's choice) to avoid fitting noise; the draft's 3-season examples were redone over 2001–2010 with target 2011, including a noise pattern built to leave the slope at exactly 0.2 °C/yr. |
+| 5b.4 | Target season fixed (`last + 1`) or explicit? | **Explicit `targetSeasonYear`**. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.
@@ -128,7 +137,7 @@ Contents
 
 - Finish the 1991–2024 London download; then the full burn on 1991–2023 seasons.
 - Multi-year Copernicus requests (spec 002 amendment) if the queue stays at ~3 h per year.
-- Detrending spec; leap-day policy; optional daily-mean rounding target; look-ahead guard.
+- Leap-day policy; optional daily-mean rounding target; look-ahead guard.
 - ERA5-vs-station bias analysis before real pricing.
 - Spec 001 range-check amendment.
 - Move the personal subagents (`code-reviewer`, `planner`, `test-writer`) into `.claude/agents/`.
