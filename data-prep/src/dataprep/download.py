@@ -99,8 +99,9 @@ def download_year(client: CdsClient, station: Station, year: int, raw_dir: Path)
         The year file path.
 
     Raises:
-        DownloadError: If the download fails or is not netCDF with both variables; no
-            partial file is left.
+        DownloadError: If the download fails, is not netCDF with both variables, or the
+            year is incomplete (names the first missing or repeated hour); no partial file
+            is left.
     """
     return download_years(client, station, [year], raw_dir, years_per_request=1)[0]
 
@@ -167,18 +168,28 @@ def download_years(
             times=[f"{h:02d}:00" for h in range(24)],
         )
         stem = raw_dir / f"era5_{station.city}_{chunk[0]}-{chunk[-1]}.download"
-        with _retrieved(client, request, stem, TEMPERATURE_VARS) as (_, ds):
-            for year in chunk:
-                target = targets[year]
-                if target.exists():  # appeared meanwhile; never overwrite
-                    continue
-                year_ds, first_missing = _split_year(ds, year)
-                if first_missing is not None:
-                    incomplete.append(
-                        f"{year} (first missing hour {first_missing:%Y-%m-%d %H:%M}; {target})"
-                    )
-                    continue
-                _write_atomic(year_ds, target)
+        try:
+            with _retrieved(client, request, stem, TEMPERATURE_VARS) as (_, ds):
+                for year in chunk:
+                    target = targets[year]
+                    if target.exists():  # appeared meanwhile; never overwrite
+                        continue
+                    year_ds, problem = _split_year(ds, year)
+                    if problem is not None:
+                        incomplete.append(f"{year} ({problem}; {target})")
+                        continue
+                    _write_atomic(year_ds, target)
+        except DownloadError as e:  # stop at once, but keep what is already known
+            notes = []
+            if len(chunk) > 1:
+                notes.append(
+                    "try --years-per-request 1 if Copernicus rejected the request as too large"
+                )
+            if incomplete:
+                notes.append(f"also incomplete: {', '.join(incomplete)}")
+            if not notes:
+                raise
+            raise DownloadError(f"{e} ({'; '.join(notes)})") from e
     if incomplete:
         raise DownloadError(
             f"incomplete ERA5 year(s) for {station.city}: {', '.join(incomplete)}. "
@@ -235,8 +246,21 @@ def download_range(
     That is the land-sea mask, one file per year touched, and the 00:00 step after ``end``
     (from the next year's file if present, else a one-step file).
 
+    Args:
+        client: The CDS client.
+        station: The settlement station.
+        start: First UTC day.
+        end: Last UTC day (inclusive).
+        raw_dir: Folder for raw files.
+        years_per_request: Years per Copernicus request, 1..``MAX_YEARS_PER_REQUEST``.
+
     Returns:
         All raw file paths needed, whether newly downloaded or already present.
+
+    Raises:
+        DownloadError: If ``start`` is after ``end``, a request fails, or a year is
+            incomplete (see ``download_years``).
+        ValueError: If ``years_per_request`` is outside 1..``MAX_YEARS_PER_REQUEST``.
     """
     if start > end:
         raise DownloadError(f"start {start} is after end {end}")
@@ -347,27 +371,28 @@ def _retrieved(
         shutil.rmtree(parts, ignore_errors=True)
 
 
-def _split_year(ds: xr.Dataset, year: int) -> tuple[xr.Dataset, pd.Timestamp | None]:
-    """Select the hours of ``year``, [Y-01-01 00:00, Y+1-01-01 00:00), from ``ds``.
+def _split_year(ds: xr.Dataset, year: int) -> tuple[xr.Dataset, str | None]:
+    """Select the hours of ``year``, [Y-01-01 00:00, Y+1-01-01 00:00), from ``ds``, in order.
 
     Returns:
-        The year's dataset and ``None`` if every hour is present exactly once, else the
-        first missing (or repeated) hour. Hours outside the year are ignored.
+        The year's dataset sorted by time, and ``None`` if every hour is present exactly
+        once, else a description of the first missing or repeated hour. Hours outside the
+        year are ignored.
     """
     time_name = "valid_time" if "valid_time" in ds.coords else "time"
     start = pd.Timestamp(year=year, month=1, day=1)
     stop = pd.Timestamp(year=year + 1, month=1, day=1)
     times = pd.DatetimeIndex(ds[time_name].values)
     in_year = np.flatnonzero((times >= start) & (times < stop))
+    in_year = in_year[np.argsort(times[in_year], kind="stable")]
     year_ds = ds.isel({time_name: in_year})
     got = times[in_year]
-    expected = pd.date_range(start, stop, freq="h", inclusive="left")
-    if len(got) == len(expected) and (got == expected).all():
-        return year_ds, None
-    absent = expected.difference(got)
+    absent = pd.date_range(start, stop, freq="h", inclusive="left").difference(got)
     if len(absent):
-        return year_ds, absent[0]
-    return year_ds, got[got.duplicated()][0]
+        return year_ds, f"first missing hour {absent[0]:%Y-%m-%d %H:%M}"
+    if got.has_duplicates:
+        return year_ds, f"first repeated hour {got[got.duplicated()][0]:%Y-%m-%d %H:%M}"
+    return year_ds, None
 
 
 # Chunk layout from a multi-year response would not fit a single year's file.
