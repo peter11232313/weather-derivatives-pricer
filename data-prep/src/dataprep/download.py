@@ -14,6 +14,7 @@ import math
 import os
 import shutil
 import zipfile
+from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Protocol
@@ -35,6 +36,10 @@ TEMPERATURE_VARS = ("mx2t", "mn2t")
 LSM_VARS = ("lsm",)
 # Any date works for the static land-sea mask; one step keeps the request small.
 LSM_DATE = date(2024, 1, 1)
+# Years of mx2t + mn2t per request (spec 002 amendment A): 3 x 17,568 items fits the
+# published ~60,000-item cap.
+MAX_YEARS_PER_REQUEST = 3
+DEFAULT_YEARS_PER_REQUEST = 3
 _ZIP_MAGIC = b"PK\x03\x04"
 # Absorbs float noise when a station edge lands exactly on a grid line.
 _SNAP_TOL = 1e-9
@@ -105,6 +110,46 @@ def download_year(client: CdsClient, station: Station, year: int, raw_dir: Path)
     return _fetch(client, request, year_file(raw_dir, station.city, year), TEMPERATURE_VARS)
 
 
+def year_chunks(years: Sequence[int], years_per_request: int) -> list[list[int]]:
+    """Group ``years`` into runs of consecutive years, each cut into chunks of at most N.
+
+    Args:
+        years: Years to request, in any order; duplicates are ignored.
+        years_per_request: Maximum years per chunk, 1..``MAX_YEARS_PER_REQUEST``.
+
+    Returns:
+        The chunks in year order; each chunk is consecutive and starts at the first year of
+        its run (or right after the previous chunk).
+
+    Raises:
+        ValueError: If ``years_per_request`` is outside 1..``MAX_YEARS_PER_REQUEST``.
+    """
+    raise NotImplementedError
+
+
+def download_years(
+    client: CdsClient,
+    station: Station,
+    years: Sequence[int],
+    raw_dir: Path,
+    *,
+    years_per_request: int = DEFAULT_YEARS_PER_REQUEST,
+) -> list[Path]:
+    """Download every hour of each missing year in ``years``, several years per request.
+
+    Years whose file exists are skipped. Missing years are requested in chunks
+    (``year_chunks``); each response is split into one complete year file per year.
+
+    Returns:
+        The year file paths for ``years``, in year order.
+
+    Raises:
+        DownloadError: If a request fails (stops at once), or after all chunks if any year
+            was incomplete (names each one; complete years are kept).
+    """
+    raise NotImplementedError
+
+
 def download_new_year_step(client: CdsClient, station: Station, year: int, raw_dir: Path) -> Path:
     """Download the single step ``year``-01-01 00:00 of ``mx2t`` and ``mn2t``.
 
@@ -140,7 +185,13 @@ def download_lsm(client: CdsClient, station: Station, raw_dir: Path) -> Path:
 
 
 def download_range(
-    client: CdsClient, station: Station, start: date, end: date, raw_dir: Path
+    client: CdsClient,
+    station: Station,
+    start: date,
+    end: date,
+    raw_dir: Path,
+    *,
+    years_per_request: int = DEFAULT_YEARS_PER_REQUEST,
 ) -> list[Path]:
     """Download everything needed to process ``start..end`` (inclusive UTC days).
 

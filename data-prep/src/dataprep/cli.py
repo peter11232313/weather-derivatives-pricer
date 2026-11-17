@@ -9,6 +9,7 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from dataprep.download import DEFAULT_YEARS_PER_REQUEST, MAX_YEARS_PER_REQUEST
 from dataprep.errors import DataPrepError, DownloadError, RegistryError
 from dataprep.paths import default_dirs, repo_root
 from dataprep.registry import Station, load_registry, registry_version
@@ -42,7 +43,14 @@ def _download(args: argparse.Namespace) -> None:
     from dataprep.download import download_range
 
     station = _station(args)
-    paths = download_range(_cds_client(), station, args.start, args.end, args.raw_dir)
+    paths = download_range(
+        _cds_client(),
+        station,
+        args.start,
+        args.end,
+        args.raw_dir,
+        years_per_request=args.years_per_request,
+    )
     print(f"raw files ready: {len(paths)} in {args.raw_dir}")
 
 
@@ -100,6 +108,11 @@ def _iso_date(text: str) -> date:
         raise argparse.ArgumentTypeError(f"not an ISO date (YYYY-MM-DD): {text!r}") from e
 
 
+def _years_per_request(text: str) -> int:
+    """Parse ``--years-per-request`` (1..MAX_YEARS_PER_REQUEST)."""
+    raise NotImplementedError
+
+
 def _parser() -> argparse.ArgumentParser:
     dirs = default_dirs()
     parser = argparse.ArgumentParser(
@@ -107,7 +120,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    def command(name: str, run, *, period: bool, raw: bool, processed: bool, pricer: bool):
+    def command(
+        name: str,
+        run,
+        *,
+        period: bool,
+        raw: bool,
+        processed: bool,
+        pricer: bool,
+        chunked: bool = False,
+    ):
         sub = commands.add_parser(name)
         sub.set_defaults(run=run)
         sub.add_argument("--city", required=True, help="registry key, e.g. london")
@@ -122,13 +144,23 @@ def _parser() -> argparse.ArgumentParser:
             )
         if raw:
             sub.add_argument("--raw-dir", type=Path, default=dirs.raw)
+        if chunked:
+            sub.add_argument(
+                "--years-per-request",
+                type=_years_per_request,
+                default=DEFAULT_YEARS_PER_REQUEST,
+                help=f"years per Copernicus request, 1..{MAX_YEARS_PER_REQUEST} "
+                f"(default {DEFAULT_YEARS_PER_REQUEST})",
+            )
         if processed:
             sub.add_argument("--processed-dir", type=Path, default=dirs.processed)
         if pricer:
             sub.add_argument("--pricer-dir", type=Path, default=dirs.pricer)
 
-    command("download", _download, period=True, raw=True, processed=False, pricer=False)
+    command(
+        "download", _download, period=True, raw=True, processed=False, pricer=False, chunked=True
+    )
     command("process", _process, period=True, raw=True, processed=True, pricer=False)
     command("publish", _publish, period=False, raw=False, processed=True, pricer=True)
-    command("build", _build, period=True, raw=True, processed=True, pricer=True)
+    command("build", _build, period=True, raw=True, processed=True, pricer=True, chunked=True)
     return parser
