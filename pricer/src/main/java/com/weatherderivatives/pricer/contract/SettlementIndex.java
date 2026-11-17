@@ -26,7 +26,9 @@ public final class SettlementIndex {
    * decimals and is returned as the nearest double.
    *
    * <p>Computing in decimal keeps exact ties exact: Tmax 6.9, Tmin 1.8 gives HDD 13.65, which
-   * rounds to 13.7, whereas the binary double {@code 13.649999999999999} would round to 13.6.
+   * rounds to 13.7, whereas the binary double {@code 13.649999999999999} would round to 13.6. Exact
+   * ties only arise when temperatures are stored at the settlement's own precision (e.g. 0.1 °C);
+   * unrounded ERA5 values or widened float32 values almost never hit one.
    *
    * @param contract the contract terms
    * @param temps daily temperatures covering the accrual period

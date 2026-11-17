@@ -40,4 +40,14 @@ public record BurnResult(
   public int seasonCount() {
     return seasons.size();
   }
+
+  /**
+   * Returns the standard error of the burn price: how far the historical mean payoff may sit from
+   * the true expected payoff, given only {@code seasonCount()} seasons.
+   *
+   * @return {@code payoffStdDevGbp / sqrt(seasonCount())} in GBP
+   */
+  public double burnPriceStdErrorGbp() {
+    return payoffStdDevGbp / Math.sqrt(seasons.size());
+  }
 }

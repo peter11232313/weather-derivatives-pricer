@@ -108,6 +108,19 @@ class BurnAnalysisTest {
     assertEquals(248.0, r.meanIndexHddDegC(), TOL);
   }
 
+  @Test
+  void burnPriceStdErrorGbp_isStdDevOverSqrtN() {
+    // call K=240: sd 20,599.35 over sqrt(3) -> 11,893.04
+    BurnResult r =
+        BurnAnalysis.run(
+            january(ContractType.CALL, 240.0, OptionalDouble.empty()),
+            januaryExample(),
+            2001,
+            2003);
+    assertEquals(11_893.04, r.burnPriceStdErrorGbp(), GBP_TOL);
+    assertEquals(r.payoffStdDevGbp() / Math.sqrt(3), r.burnPriceStdErrorGbp());
+  }
+
   // --- AC2: capped call, put, swap rows of the example table ---
 
   @Test
