@@ -55,7 +55,8 @@ def single_year_request(year: int) -> dict:
 
 def year_hours(year: int) -> pd.DatetimeIndex:
     """[Y-01-01 00:00, Y+1-01-01 00:00): 8,760 hours, or 8,784 in a leap year."""
-    return hours(f"{year}-01-01T00:00", f"{year}-12-31T23:00")
+    # Nanoseconds, as xarray decodes netCDF times (pandas 3 ranges default to microseconds).
+    return hours(f"{year}-01-01T00:00", f"{year}-12-31T23:00").as_unit("ns")
 
 
 def leftovers(raw_dir: Path) -> list[Path]:

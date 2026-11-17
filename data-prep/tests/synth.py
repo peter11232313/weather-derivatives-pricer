@@ -196,7 +196,8 @@ def is_lsm_request(request: dict[str, Any]) -> bool:
 
 def is_single_step_request(request: dict[str, Any]) -> bool:
     return (
-        as_list(request.get("month", [])) in (["01"], ["1"])
+        not is_lsm_request(request)
+        and as_list(request.get("month", [])) in (["01"], ["1"])
         and as_list(request.get("day", [])) in (["01"], ["1"])
         and len(as_list(request.get("time", []))) == 1
         and as_list(request["time"])[0].startswith("00:00")
