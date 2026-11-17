@@ -3,11 +3,11 @@ package com.weatherderivatives.pricer.model;
 import java.util.List;
 
 /**
- * Result of a burn analysis.
+ * Result of a burn analysis (spec 003).
  *
- * @param seasons one outcome per season, in year order
- * @param burnPriceGbp mean payoff in GBP (undiscounted)
- * @param payoffStdDevGbp sample standard deviation of the payoffs in GBP
+ * @param seasons one outcome per season, in year order (stored as an unmodifiable copy)
+ * @param burnPriceGbp mean payoff in GBP (undiscounted, no risk loading)
+ * @param payoffStdDevGbp sample standard deviation (n − 1) of the payoffs in GBP
  * @param minPayoffGbp smallest payoff in GBP
  * @param maxPayoffGbp largest payoff in GBP
  * @param meanIndexHddDegC mean settlement index in °C·day
@@ -20,9 +20,13 @@ public record BurnResult(
     double maxPayoffGbp,
     double meanIndexHddDegC) {
 
-  /** Copies {@code seasons}. */
+  /**
+   * Copies {@code seasons} into an unmodifiable list.
+   *
+   * @throws NullPointerException if {@code seasons} or any element is null
+   */
   public BurnResult {
-    throw new UnsupportedOperationException("not implemented");
+    seasons = List.copyOf(seasons);
   }
 
   /**
@@ -31,6 +35,6 @@ public record BurnResult(
    * @return {@code seasons().size()}
    */
   public int seasonCount() {
-    throw new UnsupportedOperationException("not implemented");
+    return seasons.size();
   }
 }
