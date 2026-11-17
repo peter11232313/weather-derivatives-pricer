@@ -110,7 +110,14 @@ def _iso_date(text: str) -> date:
 
 def _years_per_request(text: str) -> int:
     """Parse ``--years-per-request`` (1..MAX_YEARS_PER_REQUEST)."""
-    raise NotImplementedError
+    message = f"must be an integer from 1 to {MAX_YEARS_PER_REQUEST}, got {text!r}"
+    try:
+        value = int(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(message) from e
+    if not 1 <= value <= MAX_YEARS_PER_REQUEST:
+        raise argparse.ArgumentTypeError(message)
+    return value
 
 
 def _parser() -> argparse.ArgumentParser:
