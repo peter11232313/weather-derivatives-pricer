@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+### Changed
+- data-prep: every raw year file is now checked for completeness at download, so a
+  range ending in the current, unfinished year fails with the first missing hour.
+
 ### Added
+- Multi-year downloads (spec 002 amendment A): up to 3 consecutive missing years per
+  Copernicus request (`--years-per-request`, default 3), split into complete year files;
+  incomplete years reported, complete years kept. London 1991–2024 drops from ~36 to ~14
+  requests.
 - Detrended burn analysis (spec 004): `DetrendedBurnAnalysis` → `DetrendedBurnResult`
   (OLS trend of season mean temperature, daily Tmax/Tmin shifted to a target season,
   settlement and payoffs recomputed; slope, slope standard error, per-season mean and

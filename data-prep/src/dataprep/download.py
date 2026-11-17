@@ -14,10 +14,14 @@ import math
 import os
 import shutil
 import zipfile
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
+import numpy as np
+import pandas as pd
 import xarray as xr
 
 from dataprep.errors import DataError, DownloadError
@@ -35,6 +39,10 @@ TEMPERATURE_VARS = ("mx2t", "mn2t")
 LSM_VARS = ("lsm",)
 # Any date works for the static land-sea mask; one step keeps the request small.
 LSM_DATE = date(2024, 1, 1)
+# Years of mx2t + mn2t per request (spec 002 amendment A): 3 x 17,568 items fits the
+# published ~60,000-item cap.
+MAX_YEARS_PER_REQUEST = 3
+DEFAULT_YEARS_PER_REQUEST = 3
 _ZIP_MAGIC = b"PK\x03\x04"
 # Absorbs float noise when a station edge lands exactly on a grid line.
 _SNAP_TOL = 1e-9
@@ -91,18 +99,103 @@ def download_year(client: CdsClient, station: Station, year: int, raw_dir: Path)
         The year file path.
 
     Raises:
-        DownloadError: If the download fails or is not netCDF with both variables; no
-            partial file is left.
+        DownloadError: If the download fails, is not netCDF with both variables, or the
+            year is incomplete (names the first missing or repeated hour); no partial file
+            is left.
     """
-    request = _request(
-        station,
-        [MX2T, MN2T],
-        year=year,
-        months=[f"{m:02d}" for m in range(1, 13)],
-        days=[f"{d:02d}" for d in range(1, 32)],
-        times=[f"{h:02d}:00" for h in range(24)],
-    )
-    return _fetch(client, request, year_file(raw_dir, station.city, year), TEMPERATURE_VARS)
+    return download_years(client, station, [year], raw_dir, years_per_request=1)[0]
+
+
+def year_chunks(years: Sequence[int], years_per_request: int) -> list[list[int]]:
+    """Group ``years`` into runs of consecutive years, each cut into chunks of at most N.
+
+    Args:
+        years: Years to request, in any order; duplicates are ignored.
+        years_per_request: Maximum years per chunk, 1..``MAX_YEARS_PER_REQUEST``.
+
+    Returns:
+        The chunks in year order; each chunk is consecutive and starts at the first year of
+        its run (or right after the previous chunk).
+
+    Raises:
+        ValueError: If ``years_per_request`` is outside 1..``MAX_YEARS_PER_REQUEST``.
+    """
+    if not 1 <= years_per_request <= MAX_YEARS_PER_REQUEST:
+        raise ValueError(
+            f"years_per_request must be 1..{MAX_YEARS_PER_REQUEST}, got {years_per_request}"
+        )
+    chunks: list[list[int]] = []
+    for year in sorted(set(years)):
+        last = chunks[-1] if chunks else None
+        if last is not None and year == last[-1] + 1 and len(last) < years_per_request:
+            last.append(year)
+        else:
+            chunks.append([year])
+    return chunks
+
+
+def download_years(
+    client: CdsClient,
+    station: Station,
+    years: Sequence[int],
+    raw_dir: Path,
+    *,
+    years_per_request: int = DEFAULT_YEARS_PER_REQUEST,
+) -> list[Path]:
+    """Download every hour of each missing year in ``years``, several years per request.
+
+    Years whose file exists are skipped. Missing years are requested in chunks
+    (``year_chunks``); each response is split into one complete year file per year.
+
+    Returns:
+        The year file paths for ``years``, in year order.
+
+    Raises:
+        DownloadError: If a request fails (stops at once), or after all chunks if any year
+            was incomplete (names each one; complete years are kept).
+        ValueError: If ``years_per_request`` is outside 1..``MAX_YEARS_PER_REQUEST``.
+    """
+    targets = {y: year_file(raw_dir, station.city, y) for y in sorted(set(years))}
+    missing = [y for y, target in targets.items() if not target.exists()]
+    incomplete: list[str] = []
+    for chunk in year_chunks(missing, years_per_request):
+        request = _request(
+            station,
+            [MX2T, MN2T],
+            years=chunk,
+            months=[f"{m:02d}" for m in range(1, 13)],
+            days=[f"{d:02d}" for d in range(1, 32)],
+            times=[f"{h:02d}:00" for h in range(24)],
+        )
+        stem = raw_dir / f"era5_{station.city}_{chunk[0]}-{chunk[-1]}.download"
+        try:
+            with _retrieved(client, request, stem, TEMPERATURE_VARS) as (_, ds):
+                for year in chunk:
+                    target = targets[year]
+                    if target.exists():  # appeared meanwhile; never overwrite
+                        continue
+                    year_ds, problem = _split_year(ds, year)
+                    if problem is not None:
+                        incomplete.append(f"{year} ({problem}; {target})")
+                        continue
+                    _write_atomic(year_ds, target)
+        except DownloadError as e:  # stop at once, but keep what is already known
+            notes = []
+            if len(chunk) > 1:
+                notes.append(
+                    "try --years-per-request 1 if Copernicus rejected the request as too large"
+                )
+            if incomplete:
+                notes.append(f"also incomplete: {', '.join(incomplete)}")
+            if not notes:
+                raise
+            raise DownloadError(f"{e} ({'; '.join(notes)})") from e
+    if incomplete:
+        raise DownloadError(
+            f"incomplete ERA5 year(s) for {station.city}: {', '.join(incomplete)}. "
+            "Complete years were saved; rerun to request the incomplete years again."
+        )
+    return list(targets.values())
 
 
 def download_new_year_step(client: CdsClient, station: Station, year: int, raw_dir: Path) -> Path:
@@ -115,7 +208,7 @@ def download_new_year_step(client: CdsClient, station: Station, year: int, raw_d
             partial file is left.
     """
     request = _request(
-        station, [MX2T, MN2T], year=year, months=["01"], days=["01"], times=["00:00"]
+        station, [MX2T, MN2T], years=[year], months=["01"], days=["01"], times=["00:00"]
     )
     target = new_year_step_file(raw_dir, station.city, year)
     return _fetch(client, request, target, TEMPERATURE_VARS)
@@ -131,7 +224,7 @@ def download_lsm(client: CdsClient, station: Station, raw_dir: Path) -> Path:
     request = _request(
         station,
         [LSM],
-        year=LSM_DATE.year,
+        years=[LSM_DATE.year],
         months=[f"{LSM_DATE.month:02d}"],
         days=[f"{LSM_DATE.day:02d}"],
         times=["00:00"],
@@ -140,20 +233,45 @@ def download_lsm(client: CdsClient, station: Station, raw_dir: Path) -> Path:
 
 
 def download_range(
-    client: CdsClient, station: Station, start: date, end: date, raw_dir: Path
+    client: CdsClient,
+    station: Station,
+    start: date,
+    end: date,
+    raw_dir: Path,
+    *,
+    years_per_request: int = DEFAULT_YEARS_PER_REQUEST,
 ) -> list[Path]:
     """Download everything needed to process ``start..end`` (inclusive UTC days).
 
     That is the land-sea mask, one file per year touched, and the 00:00 step after ``end``
     (from the next year's file if present, else a one-step file).
 
+    Args:
+        client: The CDS client.
+        station: The settlement station.
+        start: First UTC day.
+        end: Last UTC day (inclusive).
+        raw_dir: Folder for raw files.
+        years_per_request: Years per Copernicus request, 1..``MAX_YEARS_PER_REQUEST``.
+
     Returns:
         All raw file paths needed, whether newly downloaded or already present.
+
+    Raises:
+        DownloadError: If ``start`` is after ``end``, a request fails, or a year is
+            incomplete (see ``download_years``).
+        ValueError: If ``years_per_request`` is outside 1..``MAX_YEARS_PER_REQUEST``.
     """
     if start > end:
         raise DownloadError(f"start {start} is after end {end}")
     paths = [download_lsm(client, station, raw_dir)]
-    paths += [download_year(client, station, y, raw_dir) for y in range(start.year, end.year + 1)]
+    paths += download_years(
+        client,
+        station,
+        range(start.year, end.year + 1),
+        raw_dir,
+        years_per_request=years_per_request,
+    )
     # Day `end` ends at end+1 00:00 (ADR 0002); only new if that is in the next year.
     after = end + timedelta(days=1)
     if after.year != end.year:
@@ -169,16 +287,20 @@ def _request(
     station: Station,
     variables: list[str],
     *,
-    year: int,
+    years: Sequence[int],
     months: list[str],
     days: list[str],
     times: list[str],
 ) -> dict[str, Any]:
-    """Build a CDS request for ``reanalysis-era5-single-levels``."""
+    """Build a CDS request for ``reanalysis-era5-single-levels``.
+
+    Only ``year`` differs between a single-year and a multi-year request, so a repeated
+    request matches Copernicus's cache.
+    """
     return {
         "product_type": ["reanalysis"],
         "variable": variables,
-        "year": [str(year)],
+        "year": [str(y) for y in years],
         "month": months,
         "day": days,
         "time": times,
@@ -191,49 +313,105 @@ def _request(
 def _fetch(
     client: CdsClient, request: dict[str, Any], target: Path, variables: tuple[str, ...]
 ) -> Path:
-    """Retrieve into temp files next to ``target``, unpack/merge and check, then rename.
+    """Retrieve and check (``_retrieved``), then rename the response into place unchanged.
 
-    The result must open as netCDF and contain ``variables`` (short names) before it is
-    renamed into place, so a bad download is never kept and then skipped on the next run.
+    Used for the land-sea mask and the next-year step; an existing target is not fetched.
     """
     if target.exists():
         return target
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f"{target.name}.tmp")
-    merged = target.with_name(f"{target.name}.merged.tmp")
-    parts = target.with_name(f"{target.name}.parts.tmp")
-    try:
-        try:
-            client.retrieve(DATASET, request, str(tmp))
-        except Exception as e:  # cdsapi raises plain Exception subclasses
-            raise DownloadError(f"download of {target} failed: {e}") from e
-        if not tmp.is_file():
-            raise DownloadError(f"download of {target} produced no file")
-        ready = tmp
-        with tmp.open("rb") as f:
-            is_zip = f.read(len(_ZIP_MAGIC)) == _ZIP_MAGIC
-        if is_zip:
-            _merge_zip(tmp, parts, merged, target)
-            ready = merged
-        try:
-            ds = open_era5(ready)
-        except DataError as e:
-            raise DownloadError(f"download of {target} is not readable netCDF: {e}") from e
-        missing = [name for name in variables if name not in ds.data_vars]
-        if missing:
-            found = ", ".join(map(str, ds.data_vars)) or "none"
-            raise DownloadError(
-                f"download of {target} lacks variable(s) {', '.join(missing)}; found {found}"
-            )
+    with _retrieved(client, request, target, variables) as (ready, _):
         try:
             os.replace(ready, target)
         except OSError as e:
             raise DownloadError(f"cannot move download into place at {target}: {e}") from e
+    return target
+
+
+@contextmanager
+def _retrieved(
+    client: CdsClient, request: dict[str, Any], stem: Path, variables: tuple[str, ...]
+) -> Iterator[tuple[Path, xr.Dataset]]:
+    """Retrieve into temp files named after ``stem``, unpack/merge and check the result.
+
+    Yields the checked file and its dataset (loaded into memory). The result must open as
+    netCDF and contain ``variables`` (short names), so a bad download is never kept. All
+    temp files are removed on exit.
+    """
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    tmp = stem.with_name(f"{stem.name}.tmp")
+    merged = stem.with_name(f"{stem.name}.merged.tmp")
+    parts = stem.with_name(f"{stem.name}.parts.tmp")
+    try:
+        try:
+            client.retrieve(DATASET, request, str(tmp))
+        except Exception as e:  # cdsapi raises plain Exception subclasses
+            raise DownloadError(f"download of {stem} failed: {e}") from e
+        if not tmp.is_file():
+            raise DownloadError(f"download of {stem} produced no file")
+        ready = tmp
+        with tmp.open("rb") as f:
+            is_zip = f.read(len(_ZIP_MAGIC)) == _ZIP_MAGIC
+        if is_zip:
+            _merge_zip(tmp, parts, merged, stem)
+            ready = merged
+        try:
+            ds = open_era5(ready)
+        except DataError as e:
+            raise DownloadError(f"download of {stem} is not readable netCDF: {e}") from e
+        missing = [name for name in variables if name not in ds.data_vars]
+        if missing:
+            found = ", ".join(map(str, ds.data_vars)) or "none"
+            raise DownloadError(
+                f"download of {stem} lacks variable(s) {', '.join(missing)}; found {found}"
+            )
+        yield ready, ds
     finally:
         tmp.unlink(missing_ok=True)
         merged.unlink(missing_ok=True)
         shutil.rmtree(parts, ignore_errors=True)
-    return target
+
+
+def _split_year(ds: xr.Dataset, year: int) -> tuple[xr.Dataset, str | None]:
+    """Select the hours of ``year``, [Y-01-01 00:00, Y+1-01-01 00:00), from ``ds``, in order.
+
+    Returns:
+        The year's dataset sorted by time, and ``None`` if every hour is present exactly
+        once, else a description of the first missing or repeated hour. Hours outside the
+        year are ignored.
+    """
+    time_name = "valid_time" if "valid_time" in ds.coords else "time"
+    start = pd.Timestamp(year=year, month=1, day=1)
+    stop = pd.Timestamp(year=year + 1, month=1, day=1)
+    times = pd.DatetimeIndex(ds[time_name].values)
+    in_year = np.flatnonzero((times >= start) & (times < stop))
+    in_year = in_year[np.argsort(times[in_year], kind="stable")]
+    year_ds = ds.isel({time_name: in_year})
+    got = times[in_year]
+    absent = pd.date_range(start, stop, freq="h", inclusive="left").difference(got)
+    if len(absent):
+        return year_ds, f"first missing hour {absent[0]:%Y-%m-%d %H:%M}"
+    if got.has_duplicates:
+        return year_ds, f"first repeated hour {got[got.duplicated()][0]:%Y-%m-%d %H:%M}"
+    return year_ds, None
+
+
+# Chunk layout from a multi-year response would not fit a single year's file.
+_DROP_ENCODING = ("chunksizes", "preferred_chunks", "contiguous", "original_shape")
+
+
+def _write_atomic(ds: xr.Dataset, target: Path) -> None:
+    """Write ``ds`` to ``target`` via a temp file and rename; keeps dtype and packing."""
+    out = ds.copy()
+    for var in out.variables.values():
+        var.encoding = {k: v for k, v in var.encoding.items() if k not in _DROP_ENCODING}
+    tmp = target.with_name(f"{target.name}.tmp")
+    try:
+        out.to_netcdf(tmp)
+        os.replace(tmp, target)
+    except (OSError, ValueError, RuntimeError) as e:
+        raise DownloadError(f"cannot write year file {target}: {e}") from e
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _merge_zip(archive: Path, parts: Path, merged: Path, target: Path) -> None:

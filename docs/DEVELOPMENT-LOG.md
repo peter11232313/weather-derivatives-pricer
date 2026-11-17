@@ -117,6 +117,25 @@ Contents
 | 5b.12 | Code review: a huge season range (e.g. 0..Integer.MAX_VALUE) allocated an array up front (OOM / negative size) before reading data. | Season means collected as they are read, so it fails on the first missing day; test added. |
 | 5b.13 | Shift reported as −0.0 for a zero slope with a target before the season; overflowing shifts lost the season context; the range message said "burn analysis". | `+ 0.0` normalisation; second pass wraps errors with the season; message names "detrended burn analysis (trend fit)". The unused `firstSeasonYear` parameter of the OLS helper was kept (would mean editing tests for no behaviour change). |
 | 5b.14 | Desk concerns raised, deferred: the trend is fitted on the contract months only (noisy for one-month contracts); a uniform shift moves only the mean, not the cold tail; far-future targets scale the shift linearly. | Recorded in PROGRESS.md open questions for a later spec. |
+| 5b.15 | Shipping. | Merged via PR #7 (`70dcedf`), CI green; 195 Java tests. |
+
+## 5c. Spec 002 amendment A — multi-year downloads
+
+| # | Problem / confusion | Resolution |
+| --- | --- | --- |
+| 5c.1 | Real pricing is blocked on data: ~3 h queue per request, one request per year, parallel requests rejected. | Ask for up to N consecutive missing years per request and split the result back into year files; processing unchanged. |
+| 5c.2 | How many years per request? The ~60,000-item cap is old and unconfirmed. | **Default 3, maximum 3** (owner OK; 3 × 17,568 items fits). A live 3-year test request was written to match the code's request exactly, so Copernicus's cache may serve it again when the feature runs. |
+| 5c.3 | One year of a multi-year response is incomplete: discard the chunk or keep the complete years? | **Keep the complete years** (owner's choice); report and re-request only the incomplete year. |
+| 5c.4 | Planner found a conflict: year files were never checked for completeness, so a range ending in the current, unfinished year downloaded fine; the new check would make it fail. | **Check every year** (owner OK): an unfinished year fails with a clear error naming the first missing hour. Our 1991–2024 range is unaffected. |
+| 5c.5 | Incomplete year in a chunk: stop at once or continue? | **Continue** with later chunks and raise one error at the end (each stop would waste ~3 h queue slots); a failed request still stops at once. |
+| 5c.6 | Year files are now rewritten by xarray instead of saved as the raw response bytes. | Accepted: tests require equal values, coordinates, attributes and stored dtype (no silent float32/int16 repacking). Chunk-size encodings are dropped on write so 3-year chunking cannot break a 1-year file. |
+| 5c.7 | The scratchpad test script calls `_request(year=0)`, which the new `years=` signature breaks. | Acceptable for a one-off script; run it before the change lands, or adapt it. |
+| 5c.8 | After implementing, 7 new tests still failed: (a) pandas 3 builds date ranges in microseconds while xarray decodes netCDF times in nanoseconds, and `assert_index_equal` compares the dtype; (b) the test filter `is_single_step_request` also matched the land-sea mask request (both ask for 1 Jan 00:00). | Diagnosed as test bugs, not code bugs; fixed only with the owner's OK (`.as_unit("ns")`; `not is_lsm_request`), in a separate commit. 311 Python tests green. A pandas 4 `check_freq` deprecation warning in the new tests remains (harmless). |
+| 5c.9 | A scratch-copy check of the proposed test fixes used `rm -rf`, which the settings deny. | Not worked around; asked the owner instead. |
+| 5c.10 | Code review: `_split_year` crashed with `IndexError` (a traceback, not a clean error) on a complete but unordered response, and called a repeated hour "missing". | Sort the year's hours first; report "first missing hour" or "first repeated hour". Tests added. |
+| 5c.11 | Code review: a failed request after an incomplete year hid the incomplete-year message; a rejected 3-year request gave no hint. | The failed-request error now appends the incomplete years and, for multi-year chunks, suggests `--years-per-request 1`. |
+| 5c.12 | Code review: nothing tested that packed int16 data (scale/offset/_FillValue, integer time units) survives the year-file rewrite. | Test added; it passed first time, confirming the reviewer's manual check. |
+| 5c.13 | README still said ~36 requests and did not mention the option or the unfinished-year behaviour. | README, spec text, CHANGELOG (Added + Changed) updated: ~14 requests for London 1991–2024. |
 
 ## 6. Workflow lessons
 
@@ -146,7 +165,8 @@ Contents
 ## 8. Still open
 
 - Finish the 1991–2024 London download; then the full burn on 1991–2023 seasons.
-- Multi-year Copernicus requests (spec 002 amendment) if the queue stays at ~3 h per year.
+- Live 3-year Copernicus test request (scratchpad `probe_multiyear.py`, owner's terminal)
+  pending; it confirms the 3-year cap of spec 002 amendment A.
 - Leap-day policy; optional daily-mean rounding target; look-ahead guard.
 - ERA5-vs-station bias analysis before real pricing.
 - Spec 001 range-check amendment.

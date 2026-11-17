@@ -71,8 +71,19 @@ python -m dataprep publish  --city london
 ```
 
 `download` skips files already present, so an interrupted run can simply be restarted.
-London 1991–2024 is about 36 Copernicus requests (queue time dominates; allow hours) and
-about 60–100 MB of raw files; the published file is under 1 MB with 12,419 rows.
+Missing years are fetched **up to 3 consecutive years per request**
+(`--years-per-request N`, 1–3, default 3, on `download` and `build`); each response is
+split back into one complete year file per year. London 1991–2024 is about 14 Copernicus
+requests (1 land-sea mask + 12 three-year chunks + 1 next-year step). Each request waits
+roughly 3 hours in the queue, so allow a day; run **one command at a time** (Copernicus
+rejects parallel requests) and keep the PC awake. If Copernicus rejects a 3-year request
+as too large, rerun with `--years-per-request 1`. Raw files are about 60 MB; the
+published file is under 1 MB with 12,419 rows.
+
+Every year file must hold every hour of its year. A range ending in the current,
+unfinished year therefore fails at download with an error naming the first missing hour.
+If one year of a chunk is incomplete, the complete years are kept, later chunks still
+download, and the error lists the incomplete years; a rerun requests only those.
 
 **Manual Java contract check** (spec 002, after the first real `build`):
 1. Inspect the published file:
