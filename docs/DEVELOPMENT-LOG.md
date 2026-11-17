@@ -130,6 +130,12 @@ Contents
 | 5c.5 | Incomplete year in a chunk: stop at once or continue? | **Continue** with later chunks and raise one error at the end (each stop would waste ~3 h queue slots); a failed request still stops at once. |
 | 5c.6 | Year files are now rewritten by xarray instead of saved as the raw response bytes. | Accepted: tests require equal values, coordinates, attributes and stored dtype (no silent float32/int16 repacking). Chunk-size encodings are dropped on write so 3-year chunking cannot break a 1-year file. |
 | 5c.7 | The scratchpad test script calls `_request(year=0)`, which the new `years=` signature breaks. | Acceptable for a one-off script; run it before the change lands, or adapt it. |
+| 5c.8 | After implementing, 7 new tests still failed: (a) pandas 3 builds date ranges in microseconds while xarray decodes netCDF times in nanoseconds, and `assert_index_equal` compares the dtype; (b) the test filter `is_single_step_request` also matched the land-sea mask request (both ask for 1 Jan 00:00). | Diagnosed as test bugs, not code bugs; fixed only with the owner's OK (`.as_unit("ns")`; `not is_lsm_request`), in a separate commit. 311 Python tests green. A pandas 4 `check_freq` deprecation warning in the new tests remains (harmless). |
+| 5c.9 | A scratch-copy check of the proposed test fixes used `rm -rf`, which the settings deny. | Not worked around; asked the owner instead. |
+| 5c.10 | Code review: `_split_year` crashed with `IndexError` (a traceback, not a clean error) on a complete but unordered response, and called a repeated hour "missing". | Sort the year's hours first; report "first missing hour" or "first repeated hour". Tests added. |
+| 5c.11 | Code review: a failed request after an incomplete year hid the incomplete-year message; a rejected 3-year request gave no hint. | The failed-request error now appends the incomplete years and, for multi-year chunks, suggests `--years-per-request 1`. |
+| 5c.12 | Code review: nothing tested that packed int16 data (scale/offset/_FillValue, integer time units) survives the year-file rewrite. | Test added; it passed first time, confirming the reviewer's manual check. |
+| 5c.13 | README still said ~36 requests and did not mention the option or the unfinished-year behaviour. | README, spec text, CHANGELOG (Added + Changed) updated: ~14 requests for London 1991–2024. |
 
 ## 6. Workflow lessons
 

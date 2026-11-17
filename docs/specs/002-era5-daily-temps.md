@@ -74,6 +74,10 @@ for `download_format = zip`. A zip of netCDF parts is unpacked and merged into t
 raw file above; a plain netCDF response is also accepted. Before the rename, the result
 must open as netCDF and contain the requested variables, otherwise the download is an
 error naming the path and nothing is kept (so a bad file is never skipped later).
+Since amendment A, a temperature response may cover up to 3 years; it is split into one
+year file per year, each checked for every hour of its year and written by xarray
+(values, coordinates, attributes and stored dtype preserved) with temp file + rename.
+The land-sea mask and next-year step are still renamed into place unchanged.
 
 **Processed / published file** (`<city>.parquet`, spec 001 contract):
 
@@ -188,15 +192,15 @@ In:
 Out: retries, parallel requests, other datasets or mirrors.
 
 ### Acceptance criteria
-- [ ] Given years 1993..2001 missing and `yearsPerRequest = 3`, then exactly three requests are sent with `year` = [1993, 1994, 1995], [1996, 1997, 1998], [1999, 2000, 2001], and every other request key equals the single-year request's.
-- [ ] Given a 3-year response, then three year files are written, each with every hour of its year (8,760, or 8,784 in a leap year) and values equal to the corresponding hours of the response.
-- [ ] Given 1994 already present and 1993, 1995, 1996 missing, then the requests are [1993] and [1995, 1996] (only consecutive missing years are combined; existing files are never re-requested).
-- [ ] Given `yearsPerRequest = 1`, then the requests are exactly today's single-year requests.
-- [ ] Given a 3-year response in which one year lacks an hour, then the two complete years are written as year files, the incomplete year is **not** written, and a `DownloadError` names the incomplete year; a rerun requests only the missing year.
-- [ ] Given a response containing hours outside the requested years, then they are ignored (never written to another year's file).
-- [ ] Given a failed chunk, then no temporary files remain and earlier completed chunks are kept.
-- [ ] Given `--years-per-request` below 1 or above the maximum, then the CLI exits 2 with a message naming the option.
-- [ ] The final-year next 00:00 step and the land-sea mask requests are unchanged.
+- [x] Given years 1993..2001 missing and `yearsPerRequest = 3`, then exactly three requests are sent with `year` = [1993, 1994, 1995], [1996, 1997, 1998], [1999, 2000, 2001], and every other request key equals the single-year request's.
+- [x] Given a 3-year response, then three year files are written, each with every hour of its year (8,760, or 8,784 in a leap year) and values equal to the corresponding hours of the response.
+- [x] Given 1994 already present and 1993, 1995, 1996 missing, then the requests are [1993] and [1995, 1996] (only consecutive missing years are combined; existing files are never re-requested).
+- [x] Given `yearsPerRequest = 1`, then the requests are exactly today's single-year requests.
+- [x] Given a 3-year response in which one year lacks an hour, then the two complete years are written as year files, the incomplete year is **not** written, and a `DownloadError` names the incomplete year; a rerun requests only the missing year.
+- [x] Given a response containing hours outside the requested years, then they are ignored (never written to another year's file).
+- [x] Given a failed chunk, then no temporary files remain and earlier completed chunks are kept.
+- [x] Given `--years-per-request` below 1 or above the maximum, then the CLI exits 2 with a message naming the option.
+- [x] The final-year next 00:00 step and the land-sea mask requests are unchanged.
 
 ### Decisions (2026-11-18)
 1. **Chunk size**: default 3, maximum 3 (published cap ~60,000 items; one year of `mx2t` +
