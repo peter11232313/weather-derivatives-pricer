@@ -83,23 +83,25 @@ every January day has the same temperatures within a season):
 | swap K=240 | 8,000; 39,000; −23,000 | **8,000.00** | 31,000.00 | −23,000 / 39,000 |
 
 ## Acceptance criteria
-- [ ] Given the three-season January example, when burn analysis runs for a call with K=240 and tick £1,000, then the indices are 248.0, 279.0 and 217.0, the payoffs are 8,000, 39,000 and 0, and the burn price is **15,666.67** (tolerance 0.01) with sample std dev 20,599.35 (tolerance 0.01), min 0 and max 39,000.
-- [ ] Given the same data, the capped call (cap £30,000), put (K=260) and swap (K=240) give the burn prices, std devs, mins and maxes in the example table (tolerance 0.01).
-- [ ] Given a swap with cap C, then a payoff below −C is clamped to −C and above C to C.
-- [ ] Given a payoff exactly at the strike (I = K), then call, put and swap all pay 0.0.
-- [ ] Given a Nov–Mar contract, then season 1991 accrues 1991-11-01..1992-03-31 (152 days, leap) and season 1992 accrues 1992-11-01..1993-03-31 (151 days).
-- [ ] Given `dailyHddDecimals = 1` and 31 January days with Tmax 14.0, Tmin 5.86 (daily HDD 8.07), then the index is **251.1** (31 × 8.1); with no rounding it is 250.17 (tolerance 1e-9).
-- [ ] Given `dailyHddDecimals = 1` and a daily HDD of exactly 8.25 (Tmax 10.0, Tmin 9.5), then it rounds half-up to **8.3**; and with Tmax 6.9, Tmin 1.8 (exact HDD 13.65, not exact in binary) it rounds to **13.7**, so a January index is 424.7.
-- [ ] Given a season with a missing day, then an exception names the missing date and the season (no silent skip).
-- [ ] Given fewer than 2 seasons, or `firstSeasonYear > lastSeasonYear`, then `IllegalArgumentException` (a sample std dev needs 2 values).
-- [ ] Given invalid terms (`firstMonth > lastMonth`, more than 12 months, negative strike, tick ≤ 0, cap ≤ 0, non-finite values, decimals outside 0..4), then construction fails with `IllegalArgumentException` naming the field.
-- [ ] Results are deterministic: the same inputs give bit-identical results (no randomness, fixed summation order).
-- [ ] Unit names follow AGENTS.md (`hddDegC`, `payoffGbp`, `tickGbpPerDegC`); public types and methods have Javadoc.
+- [x] Given the three-season January example, when burn analysis runs for a call with K=240 and tick £1,000, then the indices are 248.0, 279.0 and 217.0, the payoffs are 8,000, 39,000 and 0, and the burn price is **15,666.67** (tolerance 0.01) with sample std dev 20,599.35 (tolerance 0.01), min 0 and max 39,000.
+- [x] Given the same data, the capped call (cap £30,000), put (K=260) and swap (K=240) give the burn prices, std devs, mins and maxes in the example table (tolerance 0.01).
+- [x] Given a swap with cap C, then a payoff below −C is clamped to −C and above C to C.
+- [x] Given a payoff exactly at the strike (I = K), then call, put and swap all pay 0.0.
+- [x] Given a Nov–Mar contract, then season 1991 accrues 1991-11-01..1992-03-31 (152 days, leap) and season 1992 accrues 1992-11-01..1993-03-31 (151 days).
+- [x] Given `dailyHddDecimals = 1` and 31 January days with Tmax 14.0, Tmin 5.86 (daily HDD 8.07), then the index is **251.1** (31 × 8.1); with no rounding it is 250.17 (tolerance 1e-9).
+- [x] Given `dailyHddDecimals = 1` and a daily HDD of exactly 8.25 (Tmax 10.0, Tmin 9.5), then it rounds half-up to **8.3**; and with Tmax 6.9, Tmin 1.8 (exact HDD 13.65, not exact in binary) it rounds to **13.7**, so a January index is 424.7.
+- [x] Given a season with a missing day, then an exception names the missing date and the season (no silent skip).
+- [x] Given fewer than 2 seasons, or `firstSeasonYear > lastSeasonYear`, then `IllegalArgumentException` (a sample std dev needs 2 values).
+- [x] Given invalid terms (`firstMonth > lastMonth`, more than 12 months, negative strike, tick ≤ 0, cap ≤ 0, non-finite values, decimals outside 0..4), then construction fails with `IllegalArgumentException` naming the field.
+- [x] Results are deterministic: the same inputs give bit-identical results (no randomness, fixed summation order).
+- [x] Unit names follow AGENTS.md (`hddDegC`, `payoffGbp`, `tickGbpPerDegC`); public types and methods have Javadoc.
 
 ## Open questions
 None open. Resolved 2026-11-17:
 - **Rounding:** opt-in per contract, half-up rounding of each day's HDD (not of the daily
-  mean temperature); default full precision.
+  mean temperature); default full precision — [ADR 0004](../decisions/0004-settlement-rounding-daily-hdd.md).
+  Amended in review (user-approved 2026-11-17): the daily HDD is computed in exact decimal
+  before rounding, so exact ties round up.
 - **Season label:** the year of the first accrual day (1991 = winter 1991/92).
 - **Detrending:** not in this spec; the raw burn's warming bias is accepted and
   detrending is the next model spec.

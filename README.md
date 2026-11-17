@@ -9,7 +9,8 @@ Prices HDD/CDD weather derivatives on European cities using ERA5 temperatures.
 | Spec | Feature | State |
 | --- | --- | --- |
 | [001](docs/specs/001-hdd-index.md) | HDD index engine + Parquet loader | done |
-| [002](docs/specs/002-era5-daily-temps.md) | ERA5 → daily station temperatures (data-prep) | in progress |
+| [002](docs/specs/002-era5-daily-temps.md) | ERA5 → daily station temperatures (data-prep) | done |
+| [003](docs/specs/003-burn-analysis.md) | HDD contract payoffs + burn analysis | done |
 
 See [docs/PROGRESS.md](docs/PROGRESS.md) for what's next.
 
@@ -101,6 +102,22 @@ Input file: one row per UTC day with `date` (Parquet DATE), `tmax_c` and `tmin_c
 (float64; float32 accepted), Snappy, gzip or uncompressed. Missing days, duplicate
 dates, nulls, non-finite values and `tmin_c > tmax_c` are rejected with an error naming
 the date, column or path; nothing is skipped or interpolated.
+
+## Burn analysis (spec 003)
+An `HddContract` (call, put or swap; whole calendar months; strike, tick in £ per °C·day,
+optional cap, optional half-up daily HDD rounding) is priced on past seasons:
+
+```java
+HddContract call = HddContract.of(ContractType.CALL,
+    YearMonth.of(2024, 11), YearMonth.of(2025, 3),   // Nov–Mar; the year is a template
+    1900.0, 20.0, OptionalDouble.empty(), OptionalInt.of(1));
+BurnResult r = BurnAnalysis.run(call, temps, 1991, 2023); // season 1991 = winter 1991/92
+r.burnPriceGbp(); r.payoffStdDevGbp(); r.burnPriceStdErrorGbp(); r.seasons();
+```
+
+The burn price is the undiscounted mean payoff. Not yet included: detrending (under
+warming the raw burn overstates HDD), discounting, risk loading; leap seasons accrue
+29 February. Rounding: [ADR 0004](docs/decisions/0004-settlement-rounding-daily-hdd.md).
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`
