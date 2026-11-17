@@ -11,7 +11,7 @@ _Last updated: 2026-11-17_
   - Folders: `data/raw` (downloads) → `data/processed` (staging) → `data/pricer` (validated; the Java loader reads it).
   - **First real run (2026-11-17)**, London 2024-12-01..31, and manual Java check passed ([PR #4](https://github.com/peter11232313/weather-derivatives-pricer/pull/4)).
   - **1991–1992 processed and published (2026-11-17)**: 1991-01-01..1992-12-30, 730 rows, no gaps; winter 1991/92 HDD(18) 1898.45; Java and Python agree bit for bit. (Ends 12-30 because 1993-01-01 00:00 is not downloaded yet.)
-- **Spec 003 — HDD contract payoffs + burn analysis**: branch `feat/003-burn-analysis`, ready for PR.
+- **Spec 003 — HDD contract payoffs + burn analysis**: merged to `main` via [PR #5](https://github.com/peter11232313/weather-derivatives-pricer/pull/5) (`0e6f861`); CI green.
   - `contract`: `HddContract`, `ContractType`, `SettlementIndex`, `HddPayoff`; `model`: `BurnAnalysis`, `BurnResult`, `SeasonOutcome`.
   - 158 Java tests green; spotless + javadoc clean; 12/12 criteria ticked.
   - Reviewed by `code-reviewer` and `quant-reviewer`. Quant blocker fixed: rounded daily HDD is now computed in exact decimal (rounding the binary double turned ~10% of 0.1 °C ties down). Spec amended and **user-approved 2026-11-17**; [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md).
