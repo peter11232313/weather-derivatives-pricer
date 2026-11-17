@@ -107,6 +107,9 @@ Contents
 | 5b.2 | Fit the trend to each season's accrual-period mean or to the calendar-year mean? | **Accrual-period mean**: captures warming in the contract's own months (e.g. winter), at the cost of noisier points. |
 | 5b.3 | Minimum seasons for a trend? | **10** (owner's choice) to avoid fitting noise; the draft's 3-season examples were redone over 2001–2010 with target 2011, including a noise pattern built to leave the slope at exactly 0.2 °C/yr. |
 | 5b.4 | Target season fixed (`last + 1`) or explicit? | **Explicit `targetSeasonYear`**. |
+| 5b.5 | Planner: add the trend shift in binary double or in exact decimal? After a shift, a 0.1 °C rounding tie could go either way. | **Double** (owner OK'd the plan): the shift is a statistical estimate far noisier than 1 ulp, so decimal would be false precision. Noted in ADR 0004. |
+| 5b.6 | Planner: expose the trend intercept or R²? Wire into `/price`? | **No** for now: not in the spec; there is no REST layer yet. |
+| 5b.7 | A flat history must give exactly the raw burn, but a naive OLS (`m − mean(m)`) can leave a 1-ulp slope. | Slope numerator summed as `x·(m_high − m_low)` over symmetric year pairs, so equal season means give a slope of exactly +0.0. |
 
 ## 6. Workflow lessons
 
