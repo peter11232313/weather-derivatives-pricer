@@ -62,7 +62,7 @@ before the station's coordinates were corrected) is an error naming the path.
 **Raw files** (`data/raw/`):
 - `era5_<city>_<year>.nc`: `mx2t`, `mn2t`, every hour of the year, Y-01-01 00:00 through
   Y-12-31 23:00.
-- `era5_<city>_<year+1>0101T00.nc`: the single step `<year+1>-01-01 00:00`, downloaded
+- *(Superseded by amendment B: edge-day files `era5_<city>_<YYYYMMDD>.nc`.)* `era5_<city>_<year+1>0101T00.nc`: the single step `<year+1>-01-01 00:00`, downloaded
   **only for the final year of a range** and only if `era5_<city>_<year+1>.nc` is absent.
   For every other year, the last day's 00:00 step comes from the next year's file
   (ADR 0002). Processing day D therefore reads the file containing D+1 00:00.
@@ -156,7 +156,7 @@ synthetic xarray datasets built in the test, and all paths are under pytest's `t
    `ruff`. Layout: `data-prep/pyproject.toml`, src layout, package `dataprep`.
 6. **Folders**: raw, processed and pricer folders are separate; only `publish` writes to
    the pricer folder, after validation.
-7. **Next-year 00:00 step**: taken from the next year's file; one extra one-step request
+7. **Next-year 00:00 step** *(superseded by amendment B, decision 2)*: taken from the next year's file; one extra one-step request
    only for the final year (~36 Copernicus requests for 1991–2024 instead of ~69).
 8. **Planner details accepted**: `registry_version` = SHA-256 prefix; diagnostics,
    nearest-land distance/tie-break, float64 K→°C and grid-aligned area as above.
@@ -200,7 +200,7 @@ Out: retries, parallel requests, other datasets or mirrors.
 - [x] Given a response containing hours outside the requested years, then they are ignored (never written to another year's file).
 - [x] Given a failed chunk, then no temporary files remain and earlier completed chunks are kept.
 - [x] Given `--years-per-request` below 1 or above the maximum, then the CLI exits 2 with a message naming the option.
-- [x] The final-year next 00:00 step and the land-sea mask requests are unchanged.
+- [x] The final-year next 00:00 step and the land-sea mask requests are unchanged. *(The step request is superseded by amendment B: edge-day files.)*
 
 ### Decisions (2026-11-18)
 1. **Chunk size**: default 3, maximum 3 (published cap ~60,000 items; one year of `mx2t` +
@@ -215,3 +215,101 @@ Out: retries, parallel requests, other datasets or mirrors.
    still stops at once.
 5. **Year files are rewritten by xarray** (not the raw response bytes); equal values,
    coordinates, attributes and stored dtype are required.
+
+---
+
+## Amendment B — per-station observation windows (approved 2026-11-18)
+
+### Why
+Spec 002 builds every day over the UTC day 00:00..24:00 (ADR 0002). That was inherited
+from the project-wide "dates are UTC `LocalDate`" rule, not chosen per contract; ADR 0002
+already said a non-midnight observation day "would need a separate decision". Contracts
+settle on each station's own observation windows, which differ by city (all UTC, no
+daylight-saving shift):
+
+| City (station) | Tmax for day D | Tmin for day D | Source |
+| --- | --- | --- | --- |
+| London-Heathrow (WMO 03772) | D 08:50 → D+1 08:50 | D−1 08:50 → D 08:50 | Met Office |
+| Amsterdam-Schiphol (WMO 06240) | D 00:00 → D+1 00:00 | same | KNMI |
+| Paris-Orly (WMO 07149) | D 06:00 → D+1 06:00 | D−1 18:00 → D 18:00 | Météo-France |
+| Essen (WMO 10410) | D 00:00 → D+1 00:00 | same | DWD |
+
+London and Paris do not match 00:00..24:00 today.
+
+### Scope
+In:
+- **Registry**: two required fields per station, whole hours, UTC, each the start of a
+  24-hour window relative to D 00:00:
+
+  ```toml
+  tmax_window_start_utc_h = 9     # Tmax(D) = max over D 09:00 .. D+1 09:00
+  tmin_window_start_utc_h = -15   # Tmin(D) = min over D-1 09:00 .. D 09:00
+  ```
+
+  Rules: integers (not bool, not float) in −23..23; the two windows must overlap or touch,
+  |tmax − tmin| ≤ 24; a missing or invalid field is an error naming the entry.
+  The four cities above: London 9 / −15, Paris 6 / −6, Amsterdam 0 / 0, Essen 0 / 0.
+  Only London is added to `stations.toml` now (the others need confirmed coordinates).
+- **Daily step**: a window starting at D 00:00 + s uses the `mx2t`/`mn2t` values stamped
+  **D+s+1h .. D+s+24h** (each value covers the hour before its stamp, ADR 0002). Tmax(D)
+  = max of `mx2t` over the Tmax window; Tmin(D) = min of `mn2t` over the Tmin window.
+  Offsets 0 / 0 reproduce today's D 01:00..D+1 00:00 exactly. The diagnostics use the
+  same windows.
+- **Edge-day files** replace the one-step file. Processing `start..end` needs stamps from
+  `start + min(s) + 1h` to `end + 1 day + max(s)`, i.e. at most one day before `start` and
+  one day after `end`. When such a day falls in a year whose year file is absent, it comes
+  from `era5_<city>_<YYYYMMDD>.nc`: every hour of that one day (00:00..23:00), its own
+  request, skip-if-present, temp file + rename, checked for all 24 hours. Every hour is
+  still read from exactly one file (year file preferred). The old
+  `era5_<city>_<YYYY>0101T00.nc` is no longer requested or read.
+- **Metadata**: processed and published files gain `tmax_window_start_utc_h` and
+  `tmin_window_start_utc_h`; `publish` rejects them missing or invalid. The `date`
+  column now means "settlement day D" under those windows.
+- **ADR 0005** (new): per-station observation windows; supersedes ADR 0002's
+  hour-alignment section (the `mx2t`/`mn2t` choice stays).
+
+Out: adding Paris, Amsterdam or Essen to the registry; sub-hour windows; local-time or
+DST windows; ERA5-vs-station bias.
+
+### Worked example (London, offsets 9 / −15), one station value per hour, °C
+
+| valid time (UTC) | mx2t | mn2t |
+| --- | --- | --- |
+| 2024-01-15 09:00 | 14.0 | 2.0 |
+| 2024-01-15 20:00 | 8.0 | −1.0 |
+| 2024-01-16 09:00 | 11.0 | −4.0 |
+| every other hour | 8.0 | 3.0 |
+
+→ 2024-01-15: `tmax_c = 11.0` (stamps 01-15 10:00..01-16 09:00), `tmin_c = 2.0` (stamps
+01-14 10:00..01-15 09:00). The 00:00..24:00 window would give 14.0 / −1.0.
+→ 2024-01-14: `tmax_c = 14.0` (the 01-15 09:00 stamp ends its Tmax window).
+→ 2024-01-16: `tmin_c = −4.0` (window stamps 01-15 10:00..01-16 09:00).
+
+### Acceptance criteria
+- [ ] Given the London worked example, then 2024-01-15 has `tmax_c = 11.0`, `tmin_c = 2.0`; 2024-01-14 has `tmax_c = 14.0`; 2024-01-16 has `tmin_c = −4.0`.
+- [ ] Given offsets 6 / −6 (Paris), then Tmax(D) uses exactly the stamps D 07:00..D+1 06:00 and Tmin(D) exactly D−1 19:00..D 18:00 (a value just outside each window does not count; known answer in the test).
+- [ ] Given offsets 0 / 0, then every existing spec 002 criterion still holds, including the hour-alignment example (2024-01-01 → 12.0 / −3.0).
+- [ ] Given a registry entry with a window field missing, a bool or float, a value outside −23..23, or |tmax − tmin| > 24, then an error names the entry and the field.
+- [ ] Given London 1991-01-01..1991-12-31 with year files 1991 and 1992 present, then Tmin(1991-01-01) reads 1990-12-31 10:00..23:00 from the edge-day file `era5_london_19901231.nc` and Tmax(1991-12-31) reads 1992-01-01 00:00..09:00 from the 1992 year file; no hour is read twice.
+- [ ] Given a missing hourly step anywhere in the needed span (including edge-day hours), then an error names the missing timestamp.
+- [ ] Given `download` for London 1991..2024 with every year file present, then exactly two temperature requests are sent: 1990-12-31 and 2025-01-01, each one day with all 24 times and otherwise the same keys as a year request; given a 0 / 0 station, no previous-day request is sent; no day is requested when its year file exists; no `…0101T00` file is requested.
+- [ ] Given an edge-day response missing an hour, then a `DownloadError` names the day and no file is left.
+- [ ] Given a processed file, then its metadata has `tmax_window_start_utc_h` and `tmin_window_start_utc_h` equal to the registry; `publish` rejects a file with either missing or not an integer in −23..23; the diagnostics use the same windows (known answer in the test).
+- [ ] `stations.toml` London has `tmax_window_start_utc_h = 9`, `tmin_window_start_utc_h = -15`.
+- [ ] **Manual:** London reprocessed with the new windows over the years already downloaded; monthly HDD (base 18 °C) old vs new reported in the PR and the development log; the Java contract check rerun on the new file.
+- [ ] `ruff check`, `ruff format --check` clean; docstrings with units; `pytest -q` green.
+
+### Decisions (approved 2026-11-18)
+1. **08:50 → 09:00.** ERA5 extremes are per whole hour, so a window can only start on the
+   hour; 09:00 is nearest and is the Met Office climatological day (09–09 UTC).
+2. **Edge-day files, whole day**: one request per edge day (~3 h queue each); two for the
+   full London range (1990-12-31, 2025-01-01). The existing `era5_london_20250101T00.nc`
+   becomes unused and can be deleted by hand.
+3. **Window fields required, no default**: a silent 00:00 default is how the mismatch
+   happened.
+4. **Pairing**: Tmax(D) is the window starting on D, Tmin(D) the window ending on D, as in
+   the table; HDD still uses `(Tmax + Tmin) / 2` per settlement day.
+5. **London only** in `stations.toml`; the other three rows are reference for later.
+
+### Open questions
+None.

@@ -136,6 +136,18 @@ Contents
 | 5c.11 | Code review: a failed request after an incomplete year hid the incomplete-year message; a rejected 3-year request gave no hint. | The failed-request error now appends the incomplete years and, for multi-year chunks, suggests `--years-per-request 1`. |
 | 5c.12 | Code review: nothing tested that packed int16 data (scale/offset/_FillValue, integer time units) survives the year-file rewrite. | Test added; it passed first time, confirming the reviewer's manual check. |
 | 5c.13 | README still said ~36 requests and did not mention the option or the unfinished-year behaviour. | README, spec text, CHANGELOG (Added + Changed) updated: ~14 requests for London 1991–2024. |
+| 5c.14 | Shipping. | Merged via PR #8 (`e512d11`). The full London build was restarted with multi-year requests. |
+
+## 5d. Spec 002 amendment B — per-station observation windows
+
+| # | Problem / confusion | Resolution |
+| --- | --- | --- |
+| 5d.1 | The owner asked whether the code supports each station's own Tmax/Tmin windows (London 08:50–08:50, Paris 06–06 / 18–18, Amsterdam and Essen 00–00). | No: every day is the UTC day D 01:00..D+1 00:00 for both Tmax and Tmin. Correct for Amsterdam and Essen; wrong for London and Paris. |
+| 5d.2 | Why was 00–00 used for London? | Not a London decision. It came from the project-wide "dates are UTC `LocalDate`" rule and spec 001's "UTC calendar day"; ADR 0002 only chose `mx2t`/`mn2t` and aligned the hours to that day. ADR 0002 flagged that a 09–09 day "would need a separate decision", which was never made. Lesson: a default that is really a contract term must be checked per contract. |
+| 5d.3 | Are the windows UTC or local time (which would shift with summer time)? | **UTC** (owner confirmed). |
+| 5d.4 | ERA5 `mx2t`/`mn2t` cover whole hours; 08:50 cannot be matched. | Proposed: round to 09:00 (Met Office climatological day 09–09 UTC). |
+| 5d.5 | Windows reaching into the day before `start` (London Tmin) or after `end` need hours outside the downloaded years. | Proposed: whole-day edge files replace the one-step `…0101T00` file; two extra requests for London 1991–2024. |
+| 5d.6 | Order of work. | Owner: fix the windows, then reprocess London first and compare monthly HDD old vs new. The running download is unaffected (re-processing only). |
 
 ## 6. Workflow lessons
 
@@ -163,6 +175,9 @@ Contents
 | One Copernicus download at a time | PROGRESS.md |
 
 ## 8. Still open
+
+- Spec 002 amendment B (per-station observation windows) awaiting approval; London
+  reprocessing and the old-vs-new HDD comparison follow it.
 
 - Finish the 1991–2024 London download; then the full burn on 1991–2023 seasons.
 - Live 3-year Copernicus test request (scratchpad `probe_multiyear.py`, owner's terminal)
