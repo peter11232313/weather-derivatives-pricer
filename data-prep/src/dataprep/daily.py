@@ -1,7 +1,9 @@
-"""Hourly station series to daily Tmax/Tmin over UTC days (ADR 0002).
+"""Hourly station series to daily Tmax/Tmin per settlement day (ADR 0002, ADR 0005).
 
-Day D uses the hourly values stamped D 01:00 through D+1 00:00, because each
-``mx2t``/``mn2t`` value covers the hour before its time stamp.
+Each station has its own 24-hour Tmax and Tmin windows (spec 002 amendment B). A window
+starting at D 00:00 + s hours uses the values stamped D+s+1h through D+s+24h, because each
+``mx2t``/``mn2t`` value covers the hour before its time stamp. Offsets 0 / 0 give the UTC
+day: stamps D 01:00 through D+1 00:00.
 """
 
 from dataclasses import dataclass
@@ -18,12 +20,12 @@ HOURS_PER_DAY = 24
 
 @dataclass(frozen=True)
 class DailySeries:
-    """Daily temperatures for consecutive UTC days.
+    """Daily temperatures for consecutive settlement days.
 
     Attributes:
-        dates: UTC calendar days, ascending, no gaps (``datetime64[D]``).
-        tmax_c: Daily maximum temperature in degrees C (float64).
-        tmin_c: Daily minimum temperature in degrees C (float64).
+        dates: Settlement days D, ascending, no gaps (``datetime64[D]``).
+        tmax_c: Daily maximum temperature in degrees C (float64), over each day's Tmax window.
+        tmin_c: Daily minimum temperature in degrees C (float64), over each day's Tmin window.
     """
 
     dates: np.ndarray
@@ -34,37 +36,53 @@ class DailySeries:
 def needed_span(
     tmax_window_start_utc_h: int, tmin_window_start_utc_h: int, start: date, end: date
 ) -> tuple[pd.Timestamp, pd.Timestamp]:
-    """Return the first and last hourly stamps needed for ``start..end`` (inclusive)."""
-    raise NotImplementedError("spec 002 amendment B")
+    """Return the first and last hourly stamps needed for ``start..end`` (inclusive).
+
+    Args:
+        tmax_window_start_utc_h: Tmax window start, hours relative to D 00:00 UTC.
+        tmin_window_start_utc_h: Tmin window start, hours relative to D 00:00 UTC.
+        start: First settlement day.
+        end: Last settlement day (inclusive).
+
+    Returns:
+        ``(start + min(s) + 1 h, end + 1 day + max(s))`` as naive UTC timestamps.
+    """
+    low = min(tmax_window_start_utc_h, tmin_window_start_utc_h)
+    high = max(tmax_window_start_utc_h, tmin_window_start_utc_h)
+    first = pd.Timestamp(start) + pd.Timedelta(hours=low + 1)
+    last = pd.Timestamp(end) + pd.Timedelta(days=1, hours=high)
+    return first, last
 
 
 def daily_extremes(
-    mx2t_c: xr.DataArray, mn2t_c: xr.DataArray, start: date, end: date
+    mx2t_c: xr.DataArray,
+    mn2t_c: xr.DataArray,
+    start: date,
+    end: date,
+    *,
+    tmax_window_start_utc_h: int,
+    tmin_window_start_utc_h: int,
 ) -> DailySeries:
-    """Compute daily Tmax/Tmin for ``start..end`` inclusive.
+    """Compute daily Tmax/Tmin for ``start..end`` inclusive over the station's windows.
 
     Args:
         mx2t_c: Hourly station series of ``mx2t`` in degrees C (dim ``time``).
         mn2t_c: Hourly station series of ``mn2t`` in degrees C (dim ``time``).
-        start: First UTC day.
-        end: Last UTC day (inclusive).
+        start: First settlement day.
+        end: Last settlement day (inclusive).
+        tmax_window_start_utc_h: Tmax(D) window start, hours relative to D 00:00 UTC.
+        tmin_window_start_utc_h: Tmin(D) window start, hours relative to D 00:00 UTC.
 
     Raises:
-        DataError: If an hourly step in start 01:00 .. end+1 00:00 is missing (the message
-            names the timestamp), a value is NaN, or a day has tmin > tmax (the message
-            names the date).
+        DataError: If an hourly step inside a needed window is missing (the message names
+            the timestamp), a needed value is NaN (the message names the timestamp and the
+            day whose Tmax or Tmin uses it), or a day has tmin > tmax (names the date).
     """
     if start > end:
         raise DataError(f"start {start} is after end {end}")
-    # Day k covers expected[24k : 24k + 24] = D 01:00 .. D+1 00:00.
-    expected = pd.date_range(
-        pd.Timestamp(start) + pd.Timedelta(hours=1),
-        pd.Timestamp(end) + pd.Timedelta(days=1),
-        freq="h",
-    )
     n_days = (end - start).days + 1
-    tmax_c = _hourly(mx2t_c, "mx2t", expected).reshape(n_days, HOURS_PER_DAY).max(axis=1)
-    tmin_c = _hourly(mn2t_c, "mn2t", expected).reshape(n_days, HOURS_PER_DAY).min(axis=1)
+    tmax_c = _windowed(mx2t_c, "mx2t", "Tmax", tmax_window_start_utc_h, start, n_days).max(axis=1)
+    tmin_c = _windowed(mn2t_c, "mn2t", "Tmin", tmin_window_start_utc_h, start, n_days).min(axis=1)
     dates = np.arange(np.datetime64(start, "D"), np.datetime64(end, "D") + np.timedelta64(1, "D"))
     bad = np.flatnonzero(tmin_c > tmax_c)
     if bad.size:
@@ -73,12 +91,19 @@ def daily_extremes(
     return DailySeries(dates=dates, tmax_c=tmax_c, tmin_c=tmin_c)
 
 
-def _hourly(series: xr.DataArray, name: str, expected: pd.DatetimeIndex) -> np.ndarray:
-    """Return ``series`` on exactly the ``expected`` hourly steps, as float64.
+def _windowed(
+    series: xr.DataArray, name: str, label: str, window_start_h: int, start: date, n_days: int
+) -> np.ndarray:
+    """Return ``series`` as an ``(n_days, 24)`` float64 array, row k = day k's window.
+
+    Day D's window uses the stamps D+s+1h .. D+s+24h, where s is ``window_start_h``.
 
     Raises:
-        DataError: Naming the first missing timestamp, or the date of the first NaN.
+        DataError: Naming the first missing timestamp, or the first NaN's timestamp and the
+            day (``label`` of day D) that uses it.
     """
+    offset = pd.Timedelta(hours=window_start_h + 1)
+    expected = pd.date_range(pd.Timestamp(start) + offset, periods=n_days * HOURS_PER_DAY, freq="h")
     index = pd.DatetimeIndex(series["time"].values)
     if index.has_duplicates:
         raise DataError(f"{name}: duplicate time step {index[index.duplicated()][0].isoformat()}")
@@ -89,6 +114,6 @@ def _hourly(series: xr.DataArray, name: str, expected: pd.DatetimeIndex) -> np.n
     nan = np.flatnonzero(np.isnan(values))
     if nan.size:
         step = expected[nan[0]]
-        day = (step - pd.Timedelta(hours=1)).date()
-        raise DataError(f"{name}: NaN at {step.isoformat()} (day {day})")
-    return values
+        day = (step - offset).date()
+        raise DataError(f"{name}: NaN at {step.isoformat()} ({label} of day {day})")
+    return values.reshape(n_days, HOURS_PER_DAY)
