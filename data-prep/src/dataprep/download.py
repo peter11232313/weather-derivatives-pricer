@@ -87,6 +87,16 @@ def new_year_step_file(raw_dir: Path, city: str, year: int) -> Path:
     return raw_dir / f"era5_{city}_{year}0101T00.nc"
 
 
+def edge_day_file(raw_dir: Path, city: str, day: date) -> Path:
+    """Return ``<raw_dir>/era5_<city>_<YYYYMMDD>.nc`` (every hour of one edge day)."""
+    raise NotImplementedError("spec 002 amendment B")
+
+
+def download_edge_day(client: CdsClient, station: Station, day: date, raw_dir: Path) -> Path:
+    """Download every hour (00:00..23:00) of ``day`` of ``mx2t`` and ``mn2t``."""
+    raise NotImplementedError("spec 002 amendment B")
+
+
 def lsm_file(raw_dir: Path, city: str) -> Path:
     """Return ``<raw_dir>/era5_lsm_<city>.nc`` (static land-sea mask)."""
     return raw_dir / f"era5_lsm_{city}.nc"

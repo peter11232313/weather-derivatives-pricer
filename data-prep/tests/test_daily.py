@@ -33,7 +33,12 @@ def test_spec_hour_alignment_example():
     mx = [8.0] * 23 + [9.0] + [5.0] * 23 + [12.0]
     mn = [6.0] * 23 + [4.0] + [1.0] * 23 + [-3.0]
     out = daily_extremes(
-        series_c(mx, times), series_c(mn, times), date(2023, 12, 31), date(2024, 1, 1)
+        series_c(mx, times),
+        series_c(mn, times),
+        date(2023, 12, 31),
+        date(2024, 1, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
     )
     assert isinstance(out, DailySeries)
     np.testing.assert_array_equal(
@@ -51,7 +56,12 @@ def test_single_day_uses_only_its_own_window():
     mx = [50.0] + [5.0] * 24 + [60.0]
     mn = [-50.0] + [1.0] * 24 + [-60.0]
     out = daily_extremes(
-        series_c(mx, times), series_c(mn, times), date(2024, 1, 1), date(2024, 1, 1)
+        series_c(mx, times),
+        series_c(mn, times),
+        date(2024, 1, 1),
+        date(2024, 1, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
     )
     assert out.tmax_c.tolist() == [5.0]
     assert out.tmin_c.tolist() == [1.0]
@@ -63,7 +73,12 @@ def test_nan_outside_the_window_is_not_an_error():
     mx = [np.nan] + [5.0] * 24
     mn = [np.nan] + [1.0] * 24
     out = daily_extremes(
-        series_c(mx, times), series_c(mn, times), date(2024, 1, 1), date(2024, 1, 1)
+        series_c(mx, times),
+        series_c(mn, times),
+        date(2024, 1, 1),
+        date(2024, 1, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
     )
     assert out.tmax_c.tolist() == [5.0]
 
@@ -76,7 +91,14 @@ def test_nan_outside_the_window_is_not_an_error():
 def test_full_year_row_count_sorted_without_gaps(year, n_days):
     times = window(f"{year}-01-01", f"{year}-12-31")
     mx, mn = flat(times)
-    out = daily_extremes(mx, mn, date(year, 1, 1), date(year, 12, 31))
+    out = daily_extremes(
+        mx,
+        mn,
+        date(year, 1, 1),
+        date(year, 12, 31),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
+    )
     expected = np.arange(
         np.datetime64(f"{year}-01-01"), np.datetime64(f"{year + 1}-01-01"), dtype="datetime64[D]"
     )
@@ -88,7 +110,14 @@ def test_full_year_row_count_sorted_without_gaps(year, n_days):
 def test_leap_day_is_present():
     times = window("2024-02-28", "2024-03-01")
     mx, mn = flat(times)
-    out = daily_extremes(mx, mn, date(2024, 2, 28), date(2024, 3, 1))
+    out = daily_extremes(
+        mx,
+        mn,
+        date(2024, 2, 28),
+        date(2024, 3, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
+    )
     np.testing.assert_array_equal(
         out.dates, np.array(["2024-02-28", "2024-02-29", "2024-03-01"], dtype="datetime64[D]")
     )
@@ -98,7 +127,14 @@ def test_missing_interior_step_raises_naming_timestamp():
     times = window("2024-01-01", "2024-01-02").delete(12)  # drops 2024-01-01 13:00
     mx, mn = flat(times)
     with pytest.raises(DataError) as err:
-        daily_extremes(mx, mn, date(2024, 1, 1), date(2024, 1, 2))
+        daily_extremes(
+            mx,
+            mn,
+            date(2024, 1, 1),
+            date(2024, 1, 2),
+            tmax_window_start_utc_h=0,
+            tmin_window_start_utc_h=0,
+        )
     assert "2024-01-01T13:00" in str(err.value)
 
 
@@ -106,7 +142,14 @@ def test_missing_next_day_midnight_raises_naming_timestamp():
     times = hours("2024-01-01T01:00", "2024-01-01T23:00")  # no 2024-01-02 00:00
     mx, mn = flat(times)
     with pytest.raises(DataError) as err:
-        daily_extremes(mx, mn, date(2024, 1, 1), date(2024, 1, 1))
+        daily_extremes(
+            mx,
+            mn,
+            date(2024, 1, 1),
+            date(2024, 1, 1),
+            tmax_window_start_utc_h=0,
+            tmin_window_start_utc_h=0,
+        )
     assert "2024-01-02T00:00" in str(err.value)
 
 
@@ -116,7 +159,14 @@ def test_missing_step_only_in_mn2t_raises_naming_timestamp():
     short = times.delete(4)  # 2024-01-01 05:00
     mn = series_c([1.0] * len(short), short)
     with pytest.raises(DataError) as err:
-        daily_extremes(mx, mn, date(2024, 1, 1), date(2024, 1, 1))
+        daily_extremes(
+            mx,
+            mn,
+            date(2024, 1, 1),
+            date(2024, 1, 1),
+            tmax_window_start_utc_h=0,
+            tmin_window_start_utc_h=0,
+        )
     assert "2024-01-01T05:00" in str(err.value)
 
 
@@ -134,6 +184,8 @@ def test_nan_in_hourly_series_raises_naming_date(variable):
             series_c(mn_vals, times),
             date(2024, 3, 9),
             date(2024, 3, 11),
+            tmax_window_start_utc_h=0,
+            tmin_window_start_utc_h=0,
         )
     assert "2024-03-10" in str(err.value)
 
@@ -145,12 +197,26 @@ def test_daily_tmin_above_tmax_raises_naming_date():
     mx = np.where(day2, 1.0, 5.0)
     mn = np.where(day2, 3.0, 1.0)
     with pytest.raises(DataError) as err:
-        daily_extremes(series_c(mx, times), series_c(mn, times), date(2024, 1, 1), date(2024, 1, 3))
+        daily_extremes(
+            series_c(mx, times),
+            series_c(mn, times),
+            date(2024, 1, 1),
+            date(2024, 1, 3),
+            tmax_window_start_utc_h=0,
+            tmin_window_start_utc_h=0,
+        )
     assert "2024-01-02" in str(err.value)
 
 
 def test_tmin_equal_to_tmax_is_allowed():
     times = window("2024-01-01", "2024-01-01")
     mx, mn = flat(times, mx=2.0, mn=2.0)
-    out = daily_extremes(mx, mn, date(2024, 1, 1), date(2024, 1, 1))
+    out = daily_extremes(
+        mx,
+        mn,
+        date(2024, 1, 1),
+        date(2024, 1, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
+    )
     assert out.tmax_c.tolist() == [2.0] and out.tmin_c.tolist() == [2.0]

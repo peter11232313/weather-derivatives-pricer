@@ -23,6 +23,8 @@ wmo_id = "03772"
 icao = "EGLL"
 lat = 51.479
 lon = -0.449
+tmax_window_start_utc_h = 0
+tmin_window_start_utc_h = 0
 """
 
 

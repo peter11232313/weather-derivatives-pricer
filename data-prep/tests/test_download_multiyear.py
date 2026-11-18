@@ -14,7 +14,14 @@ import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 import xarray as xr
-from synth import FakeCdsClient, as_list, hours, is_lsm_request, is_single_step_request
+from synth import (
+    FakeCdsClient,
+    as_list,
+    hours,
+    is_edge_day_request,
+    is_lsm_request,
+    is_single_step_request,
+)
 
 from dataprep.download import (
     DEFAULT_YEARS_PER_REQUEST,
@@ -407,7 +414,7 @@ def test_a7_failed_first_chunk_leaves_no_files(raw_dir, london, mode):
 # --------------------------------------------------------------------------- A9
 
 
-def test_a9_land_sea_mask_and_next_year_step_requests_are_unchanged(tmp_path, london):
+def test_a9_land_sea_mask_unchanged_and_next_year_step_is_now_an_edge_day(tmp_path, london):
     start, end = date(1993, 1, 1), date(1995, 12, 31)
     clients = {}
     for n in (1, 3):
@@ -426,15 +433,26 @@ def test_a9_land_sea_mask_and_next_year_step_requests_are_unchanged(tmp_path, lo
         "data_format": "netcdf",
         "download_format": "zip",
     }
-    expected_step = {**expected_lsm, "variable": [MX2T, MN2T], "year": ["1996"]}
-    for client in clients.values():
+    # Amendment B: the 1996-01-01 00:00 step became the whole edge day 1996-01-01.
+    expected_edge = {
+        **expected_lsm,
+        "variable": [MX2T, MN2T],
+        "year": ["1996"],
+        "month": ["01"],
+        "day": ["01"],
+        "time": TIMES,
+    }
+    for n, client in clients.items():
         lsm = [r for r in client.requests if is_lsm_request(r)]
-        steps = [r for r in client.requests if is_single_step_request(r)]
+        edges = [r for r in client.requests if is_edge_day_request(r)]
         assert lsm == [expected_lsm]
         assert list(lsm[0]) == list(expected_lsm)
-        assert steps == [expected_step]
-        assert list(steps[0]) == list(expected_step)
-        assert client.requests[-1] == expected_step  # still requested last
+        assert edges == [expected_edge]
+        assert list(edges[0]) == list(single_year_request(1996))  # a year request's keys
+        assert client.requests[-1] == expected_edge  # still requested last
+        assert not any(is_single_step_request(r) for r in client.requests)
+        assert not any("0101T00" in target for _, _, target in client.calls)
+        assert not any("0101T00" in p.name for p in (tmp_path / f"n{n}").iterdir())
 
 
 def test_a9_no_step_request_when_next_year_file_exists(raw_dir, london):
@@ -445,4 +463,5 @@ def test_a9_no_step_request_when_next_year_file_exists(raw_dir, london):
     )
     assert client.temperature_years() == [["1993", "1994", "1995"]]
     assert not any(is_single_step_request(r) for r in client.requests)
+    assert not any(is_edge_day_request(r) for r in client.requests)
     assert year_file(raw_dir, "london", 1996) in paths

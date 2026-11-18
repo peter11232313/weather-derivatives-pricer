@@ -20,6 +20,8 @@ METADATA = {
     "created_utc": "2026-11-16T12:00:00Z",
     "tmean_nearest_c_mean": "5.5",
     "tmean_3x3_c_mean": "5.25",
+    "tmax_window_start_utc_h": "9",
+    "tmin_window_start_utc_h": "-15",
 }
 
 

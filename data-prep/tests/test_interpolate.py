@@ -176,7 +176,14 @@ def test_tmax_is_max_of_interpolated_hourly_not_interpolated_daily_max():
     station = make_station(51.375, -0.375, city="peaks")
     mx_s, _ = to_station(field_c(mx, lats, lons, times), lsm, station)
     mn_s, _ = to_station(field_c(mn, lats, lons, times), lsm, station)
-    out = daily_extremes(mx_s, mn_s, date(2024, 1, 1), date(2024, 1, 1))
+    out = daily_extremes(
+        mx_s,
+        mn_s,
+        date(2024, 1, 1),
+        date(2024, 1, 1),
+        tmax_window_start_utc_h=0,
+        tmin_window_start_utc_h=0,
+    )
     assert out.tmax_c[0] == pytest.approx(5.0, abs=1e-9)
     assert out.tmin_c[0] == pytest.approx(-5.0, abs=1e-9)
 

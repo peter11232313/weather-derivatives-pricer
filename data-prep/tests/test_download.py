@@ -10,6 +10,8 @@ from synth import (
     MX2T_NAMES,
     FakeCdsClient,
     as_list,
+    edge_day_of,
+    is_edge_day_request,
     is_lsm_request,
     is_single_step_request,
     make_station,
@@ -19,12 +21,12 @@ from synth import (
 from dataprep.download import (
     DATASET,
     area_for,
+    download_edge_day,
     download_lsm,
-    download_new_year_step,
     download_range,
     download_year,
+    edge_day_file,
     lsm_file,
-    new_year_step_file,
     year_file,
 )
 from dataprep.errors import DownloadError
@@ -55,7 +57,7 @@ def test_area_for_southern_and_western_hemisphere():
 
 def test_raw_file_names(raw_dir):
     assert year_file(raw_dir, "london", 2024) == raw_dir / "era5_london_2024.nc"
-    assert new_year_step_file(raw_dir, "london", 2025) == raw_dir / "era5_london_20250101T00.nc"
+    assert edge_day_file(raw_dir, "london", date(2025, 1, 1)) == raw_dir / "era5_london_20250101.nc"
     assert lsm_file(raw_dir, "london") == raw_dir / "era5_lsm_london.nc"
 
 
@@ -109,23 +111,27 @@ def test_zip_response_is_an_error_and_leaves_no_file(raw_dir, london):
     assert list(raw_dir.iterdir()) == []
 
 
-# --------------------------------------------------------------------------- step & lsm
+# --------------------------------------------------------------------------- edge day & lsm
 
 
-def test_new_year_step_requests_single_midnight_step(raw_dir, london):
+def test_edge_day_requests_every_hour_of_one_day(raw_dir, london):
     client = FakeCdsClient()
-    out = download_new_year_step(client, london, 2025, raw_dir)
-    assert out == raw_dir / "era5_london_20250101T00.nc"
+    out = download_edge_day(client, london, date(2025, 1, 1), raw_dir)
+    assert out == raw_dir / "era5_london_20250101.nc"
     assert out.is_file()
     (request,) = client.requests
     assert as_list(request["year"]) == ["2025"]
-    assert is_single_step_request(request)
+    assert is_edge_day_request(request)
+    assert edge_day_of(request) == date(2025, 1, 1)
+    assert not is_single_step_request(request)
     assert request_variables(request) & MX2T_NAMES and request_variables(request) & MN2T_NAMES
 
 
-def test_new_year_step_failure_leaves_no_file(raw_dir, london):
+def test_edge_day_failure_leaves_no_file(raw_dir, london):
     with pytest.raises(DownloadError):
-        download_new_year_step(FakeCdsClient(mode="partial_then_raise"), london, 2025, raw_dir)
+        download_edge_day(
+            FakeCdsClient(mode="partial_then_raise"), london, date(2025, 1, 1), raw_dir
+        )
     assert list(raw_dir.iterdir()) == []
 
 
@@ -157,67 +163,74 @@ def test_existing_lsm_is_not_downloaded_again(raw_dir, london):
 # --------------------------------------------------------------------------- download_range
 
 
-def classify(client: FakeCdsClient) -> tuple[list[str], list[str], int]:
-    """Return (full-year years, single-step years, lsm request count)."""
-    full, steps, lsm = [], [], 0
+def classify(client: FakeCdsClient) -> tuple[list[str], list[date], int]:
+    """Return (full-year years, edge days, lsm request count).
+
+    The old one-step request (amendment B removed it) is counted as a full-year request so
+    that it can never pass unnoticed.
+    """
+    full, edges, lsm = [], [], 0
     for request in client.requests:
         if is_lsm_request(request):
             lsm += 1
-        elif is_single_step_request(request):
-            steps.extend(as_list(request["year"]))
+        elif is_edge_day_request(request):
+            edges.append(edge_day_of(request))
         else:
             full.extend(as_list(request["year"]))
-    return sorted(full), sorted(steps), lsm
+    return sorted(full), sorted(edges), lsm
 
 
-def test_range_downloads_years_lsm_and_final_step_not_next_full_year(raw_dir, london):
+def test_range_downloads_years_lsm_and_final_edge_day_not_next_full_year(raw_dir, london):
     client = FakeCdsClient()
     paths = download_range(client, london, date(2023, 1, 1), date(2024, 12, 31), raw_dir)
-    full, steps, lsm = classify(client)
+    full, edges, lsm = classify(client)
     assert full == ["2023", "2024"]
-    assert steps == ["2025"]
+    assert edges == [date(2025, 1, 1)]
     assert lsm == 1
     assert all(name == DATASET for name, _, _ in client.calls)
     assert set(paths) == {
         raw_dir / "era5_lsm_london.nc",
         raw_dir / "era5_london_2023.nc",
         raw_dir / "era5_london_2024.nc",
-        raw_dir / "era5_london_20250101T00.nc",
+        raw_dir / "era5_london_20250101.nc",
     }
     assert all(p.is_file() for p in paths)
+    assert not (raw_dir / "era5_london_20250101T00.nc").exists()
 
 
-def test_range_uses_existing_next_year_file_instead_of_step(raw_dir, london):
+def test_range_uses_existing_next_year_file_instead_of_edge_day(raw_dir, london):
     (raw_dir / "era5_london_2025.nc").write_bytes(b"next year already downloaded")
     client = FakeCdsClient()
     paths = download_range(client, london, date(2023, 1, 1), date(2024, 12, 31), raw_dir)
-    full, steps, _ = classify(client)
+    full, edges, _ = classify(client)
     assert full == ["2023", "2024"]
-    assert steps == []
+    assert edges == []
     assert raw_dir / "era5_london_2025.nc" in paths
+    assert not (raw_dir / "era5_london_20250101.nc").exists()
     assert not (raw_dir / "era5_london_20250101T00.nc").exists()
 
 
 def test_range_starting_1_january_does_not_request_previous_year(raw_dir, london):
-    # Day 2024-01-01 uses 01:00..2024-01-02 00:00; 2024-01-01 00:00 belongs to 2023-12-31.
+    # 0 / 0 windows: day 2024-01-01 uses 01:00..2024-01-02 00:00; 2024-01-01 00:00
+    # belongs to 2023-12-31, so no 2023 year file and no 2023-12-31 edge day.
     client = FakeCdsClient()
     download_range(client, london, date(2024, 1, 1), date(2024, 12, 31), raw_dir)
-    full, steps, _ = classify(client)
+    full, edges, _ = classify(client)
     assert full == ["2024"]
-    assert steps == ["2025"]
+    assert edges == [date(2025, 1, 1)]
 
 
-def test_range_ending_mid_year_needs_no_step(raw_dir, london):
+def test_range_ending_mid_year_needs_no_edge_day(raw_dir, london):
     client = FakeCdsClient()
     download_range(client, london, date(2024, 3, 1), date(2024, 6, 30), raw_dir)
-    full, steps, lsm = classify(client)
+    full, edges, lsm = classify(client)
     assert full == ["2024"]
-    assert steps == []
+    assert edges == []
     assert lsm == 1
 
 
 def test_range_with_everything_present_makes_no_requests(raw_dir, london):
-    for name in ["era5_lsm_london.nc", "era5_london_2024.nc", "era5_london_20250101T00.nc"]:
+    for name in ["era5_lsm_london.nc", "era5_london_2024.nc", "era5_london_20250101.nc"]:
         (raw_dir / name).write_bytes(b"present")
     client = FakeCdsClient()
     paths = download_range(client, london, date(2024, 1, 1), date(2024, 12, 31), raw_dir)

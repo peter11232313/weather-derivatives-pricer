@@ -31,6 +31,13 @@ class DailySeries:
     tmin_c: np.ndarray
 
 
+def needed_span(
+    tmax_window_start_utc_h: int, tmin_window_start_utc_h: int, start: date, end: date
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return the first and last hourly stamps needed for ``start..end`` (inclusive)."""
+    raise NotImplementedError("spec 002 amendment B")
+
+
 def daily_extremes(
     mx2t_c: xr.DataArray, mn2t_c: xr.DataArray, start: date, end: date
 ) -> DailySeries:
