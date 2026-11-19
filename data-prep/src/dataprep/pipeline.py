@@ -143,6 +143,7 @@ def _process(
         "created_utc": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tmean_nearest_c_mean": repr(nearest),
         "tmean_3x3_c_mean": repr(box),
+        "tmin_tmax_adjusted_days": str(daily.tmin_tmax_adjusted_days),
         **{key: str(value) for key, value in windows.items()},
     }
     return write_parquet(processed_dir / f"{station.city}.parquet", daily, metadata)

@@ -26,11 +26,14 @@ class DailySeries:
         dates: Settlement days D, ascending, no gaps (``datetime64[D]``).
         tmax_c: Daily maximum temperature in degrees C (float64), over each day's Tmax window.
         tmin_c: Daily minimum temperature in degrees C (float64), over each day's Tmin window.
+        tmin_tmax_adjusted_days: Days whose Tmin exceeded Tmax under touching windows and
+            were set to the midpoint (spec 002 amendment B, decision 6).
     """
 
     dates: np.ndarray
     tmax_c: np.ndarray
     tmin_c: np.ndarray
+    tmin_tmax_adjusted_days: int = 0
 
 
 def needed_span(
@@ -76,7 +79,9 @@ def daily_extremes(
     Raises:
         DataError: If an hourly step inside a needed window is missing (the message names
             the timestamp), a needed value is NaN (the message names the timestamp and the
-            day whose Tmax or Tmin uses it), or a day has tmin > tmax (names the date).
+            day whose Tmax or Tmin uses it), or a day has tmin > tmax under overlapping
+            windows (names the date). Under touching windows (24 h apart) such a day's
+            Tmax and Tmin are both set to their midpoint and counted instead.
     """
     if start > end:
         raise DataError(f"start {start} is after end {end}")
@@ -85,10 +90,19 @@ def daily_extremes(
     tmin_c = _windowed(mn2t_c, "mn2t", "Tmin", tmin_window_start_utc_h, start, n_days).min(axis=1)
     dates = np.arange(np.datetime64(start, "D"), np.datetime64(end, "D") + np.timedelta64(1, "D"))
     bad = np.flatnonzero(tmin_c > tmax_c)
-    if bad.size:
+    touching = abs(tmax_window_start_utc_h - tmin_window_start_utc_h) == HOURS_PER_DAY
+    if bad.size and not touching:
         k = bad[0]
         raise DataError(f"tmin_c {tmin_c[k]} > tmax_c {tmax_c[k]} on {dates[k]}")
-    return DailySeries(dates=dates, tmax_c=tmax_c, tmin_c=tmin_c)
+    if bad.size:
+        # Decision 6: the windows meet at one instant that ERA5's hourly extremes on either
+        # side do not share; the midpoint approximates the temperature at that instant.
+        midpoint = (tmax_c[bad] + tmin_c[bad]) / 2
+        tmax_c[bad] = midpoint
+        tmin_c[bad] = midpoint
+    return DailySeries(
+        dates=dates, tmax_c=tmax_c, tmin_c=tmin_c, tmin_tmax_adjusted_days=int(bad.size)
+    )
 
 
 def _windowed(
