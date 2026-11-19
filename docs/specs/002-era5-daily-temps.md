@@ -296,6 +296,8 @@ DST windows; ERA5-vs-station bias.
 - [ ] Given an edge-day response missing an hour, then a `DownloadError` names the day and no file is left.
 - [ ] Given a processed file, then its metadata has `tmax_window_start_utc_h` and `tmin_window_start_utc_h` equal to the registry; `publish` rejects a file with either missing or not an integer in −23..23; the diagnostics use the same windows (known answer in the test).
 - [ ] `stations.toml` London has `tmax_window_start_utc_h = 9`, `tmin_window_start_utc_h = -15`.
+- [ ] Given touching windows (|tmax − tmin| = 24, e.g. London) and a day whose Tmin exceeds its Tmax (the 1991-11-08 shape: mn2t stamped D 09:00 = 11.302, mx2t stamped D 10:00 = 11.273, falling all day), then that day's `tmin_c` and `tmax_c` are both the midpoint (11.2875), HDD equals the unadjusted `max(0, 18 − (Tmax + Tmin)/2)`, and metadata `tmin_tmax_adjusted_days` counts such days ("0" when none).
+- [ ] Given overlapping windows (|tmax − tmin| < 24, e.g. 0 / 0 or 6 / −6) and a day with Tmin > Tmax, then it is still an error naming the date (it cannot happen with consistent data).
 - [ ] **Manual:** London reprocessed with the new windows over the years already downloaded; monthly HDD (base 18 °C) old vs new reported in the PR and the development log; the Java contract check rerun on the new file.
 - [ ] `ruff check`, `ruff format --check` clean; docstrings with units; `pytest -q` green.
 
@@ -310,6 +312,15 @@ DST windows; ERA5-vs-station bias.
 4. **Pairing**: Tmax(D) is the window starting on D, Tmin(D) the window ending on D, as in
    the table; HDD still uses `(Tmax + Tmin) / 2` per settlement day.
 5. **London only** in `stations.toml`; the other three rows are reference for later.
+6. **Tmin > Tmax with touching windows (2026-11-19, owner: option 3).** With London's
+   9 / −15 windows, Tmin(D) ends and Tmax(D) starts at D 09:00. ERA5's hourly extremes
+   for 08–09 and 09–10 do not share the 09:00 instant, so on a day that cools steadily
+   through 09:00 Tmin can exceed Tmax by a few hundredths of a degree (3 of 1,459 days in
+   1991–1994, ≤ 0.07 °C). Both are then set to their midpoint, about T(09:00), which a
+   station thermometer would record for both; HDD is unchanged (it uses the sum). The
+   count is recorded in metadata `tmin_tmax_adjusted_days` (informational; not required
+   by `publish`). With overlapping windows Tmin > Tmax stays an error. Rejected: allowing
+   Tmin > Tmax (needs a Java pricer change) or a fixed tolerance (arbitrary).
 
 ### Open questions
 None.

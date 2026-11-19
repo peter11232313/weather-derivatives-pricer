@@ -31,6 +31,10 @@ Contracts settle on each station's own observation windows, all in UTC:
 - Hours outside the downloaded years (at most one day before the start and one after the
   end) come from whole-day edge files `era5_<city>_<YYYYMMDD>.nc`, replacing the one-step
   `…0101T00` file.
+- With touching windows (London), a day whose Tmin exceeds its Tmax (steady cooling
+  through 09:00; ERA5's 08–09 minimum and 09–10 maximum do not share the 09:00 instant)
+  gets both set to their midpoint; the count is in metadata `tmin_tmax_adjusted_days`.
+  HDD is unchanged. Overlapping windows keep Tmin > Tmax as an error.
 
 ## Consequences
 - London and Paris daily values change; processed files must be regenerated (no new
