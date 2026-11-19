@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Changed
+- data-prep (spec 002 amendment B, ADR 0005): daily Tmax/Tmin follow each station's
+  observation windows, two required whole-hour UTC offsets in `stations.toml` (London
+  9 / −15, i.e. 09–09 UTC; was the UTC day 00–00 for every station). Processed files
+  record the offsets and `tmin_tmax_adjusted_days`; `publish` requires the offsets.
+  Whole-day edge-day files `era5_<city>_<YYYYMMDD>.nc` replace the one-step
+  `…0101T00.nc` file. With touching windows, a day with Tmin > Tmax gets both set to the
+  midpoint. London monthly HDD drops by about 4 on average; reprocess and republish.
 - data-prep: every raw year file is now checked for completeness at download, so a
   range ending in the current, unfinished year fails with the first missing hour.
 

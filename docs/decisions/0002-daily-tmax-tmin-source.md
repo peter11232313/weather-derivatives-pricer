@@ -1,6 +1,6 @@
 # 0002 — Daily Tmax/Tmin from ERA5 `mx2t` / `mn2t`
 
-- Status: accepted
+- Status: accepted; hour alignment superseded by [ADR 0005](0005-per-station-observation-windows.md)
 - Date: 2026-11-16
 - Resolves: spec 001 open question 2
 
@@ -26,7 +26,7 @@ must include 00:00 of the day after the last day of the range.
 - Two variables to download instead of one (`t2m` is no longer needed for HDD).
 - The data-prep spec must state the hour alignment and test it (a known-answer test
   with a peak at 00:30 belongs to the previous day).
-- Settlement days are UTC days (spec 001). Contracts with a non-midnight observation
+- Settlement days are UTC days (spec 001). *(Superseded by ADR 0005: per-station windows.)* Contracts with a non-midnight observation
   day (e.g. 09–09) would need a separate decision.
 - The `era5-data` skill's default (max/min of hourly `t2m`) is overridden for this
   project by this ADR, which the skill allows ("unless a spec says to use `mx2t`/`mn2t`").

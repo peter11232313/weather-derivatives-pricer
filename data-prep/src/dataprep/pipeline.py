@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from dataprep.daily import DailySeries, daily_extremes
-from dataprep.download import area_for, lsm_file, new_year_step_file, year_file
+from dataprep.daily import DailySeries, daily_extremes, needed_span
+from dataprep.download import area_for, edge_day_file, lsm_file, year_file
 from dataprep.errors import DataError
 from dataprep.interpolate import mean_3x3, nearest_cell, to_station
 from dataprep.load import normalise, open_era5
@@ -24,11 +24,11 @@ _GRID_TOL = 1e-6
 def load_hourly(station: Station, start: date, end: date, raw_dir: Path) -> xr.Dataset:
     """Load and normalise the hourly ``mx2t``/``mn2t`` needed for ``start..end``.
 
-    Returns exactly the steps ``start`` 01:00 .. ``end``+1 00:00 that exist in the files
-    (a missing step is reported later by ``daily_extremes``). Each hour comes from one
-    file only: year file Y supplies [Y-01-01 00:00, Y+1-01-01 00:00). The 00:00 step after
-    ``end`` comes from the next year's file if present, else from the one-step file
-    (ADR 0002).
+    Returns exactly the steps of ``needed_span`` for the station's windows that exist in
+    the files (a missing step is reported later by ``daily_extremes``). Each hour comes
+    from one file only: year file Y, if present, supplies [Y-01-01 00:00, Y+1-01-01 00:00);
+    otherwise a day outside ``start..end`` comes from its edge-day file (spec 002
+    amendment B).
 
     Raises:
         DataError: If ``start`` is after ``end``, or a needed raw file is missing, lacks
@@ -37,23 +37,39 @@ def load_hourly(station: Station, start: date, end: date, raw_dir: Path) -> xr.D
     """
     if start > end:
         raise DataError(f"start {start} is after end {end}")
-    first = pd.Timestamp(start) + pd.Timedelta(hours=1)
-    last = pd.Timestamp(end) + pd.Timedelta(days=1)
+    first, last = needed_span(
+        station.tmax_window_start_utc_h, station.tmin_window_start_utc_h, start, end
+    )
     parts = []
     for year in range(first.year, last.year + 1):
         path = year_file(raw_dir, station.city, year)
-        is_final_midnight = year == last.year and last == pd.Timestamp(year, 1, 1)
-        if not path.exists() and is_final_midnight:
-            path = new_year_step_file(raw_dir, station.city, year)
-        if not path.exists():
+        if path.exists():
+            parts.append(_own_hours(path, station, pd.Timestamp(year, 1, 1), 366))
+            continue
+        days = pd.date_range(
+            max(first.normalize(), pd.Timestamp(year, 1, 1)),
+            min(last.normalize(), pd.Timestamp(year, 12, 31)),
+            freq="D",
+        )
+        if any(start <= day.date() <= end for day in days):
             raise DataError(f"raw ERA5 file not found: {path}")
-        ds = _open_checked(path, station, ("mx2t", "mn2t"))
-        if "time" not in ds.dims:
-            ds = ds.expand_dims("time")  # a one-step file may store time as a scalar
-        own = slice(pd.Timestamp(year, 1, 1), pd.Timestamp(year + 1, 1, 1) - pd.Timedelta("1ns"))
-        parts.append(ds.sortby("time").sel(time=own))
+        for day in days:
+            edge = edge_day_file(raw_dir, station.city, day.date())
+            if not edge.exists():
+                raise DataError(f"raw ERA5 file not found: {path} (or edge-day file {edge})")
+            parts.append(_own_hours(edge, station, day, 1))
     hourly = xr.concat(parts, dim="time") if len(parts) > 1 else parts[0]
     return hourly.sel(time=slice(first, last))
+
+
+def _own_hours(path: Path, station: Station, first: pd.Timestamp, max_days: int) -> xr.Dataset:
+    """Open ``path`` and keep only its own hours, [``first``, end of year or day), sorted.
+
+    A year file owns its calendar year; an edge-day file owns its day (``max_days`` 1).
+    """
+    ds = _open_checked(path, station, ("mx2t", "mn2t")).sortby("time")
+    stop = min(first + pd.Timedelta(days=max_days), pd.Timestamp(first.year + 1, 1, 1))
+    return ds.sel(time=slice(first, stop - pd.Timedelta("1ns")))
 
 
 def process(
@@ -67,8 +83,9 @@ def process(
 ) -> Path:
     """Build ``<processed_dir>/<city>.parquet`` for ``start..end``.
 
-    Load, interpolate to the station (ADR 0003), compute daily extremes (ADR 0002),
-    compute the diagnostics and write with metadata. ``now`` (UTC) fills ``created_utc``.
+    Load, interpolate to the station (ADR 0003), compute daily extremes over the
+    station's observation windows (ADR 0002, ADR 0005), compute the diagnostics with the
+    same windows and write with metadata. ``now`` (UTC) fills ``created_utc``.
 
     Returns:
         The processed file path.
@@ -97,14 +114,22 @@ def _process(
     lsm = _load_lsm(station, raw_dir)
     mx2t, method = to_station(hourly["mx2t"], lsm, station)
     mn2t, _ = to_station(hourly["mn2t"], lsm, station)
-    daily = daily_extremes(mx2t, mn2t, start, end)
+    windows = {
+        "tmax_window_start_utc_h": station.tmax_window_start_utc_h,
+        "tmin_window_start_utc_h": station.tmin_window_start_utc_h,
+    }
+    daily = daily_extremes(mx2t, mn2t, start, end, **windows)
 
     lat, lon = station.lat_deg, station.lon_deg
     nearest = _daily_mean_c(
-        nearest_cell(hourly["mx2t"], lat, lon), nearest_cell(hourly["mn2t"], lat, lon), start, end
+        nearest_cell(hourly["mx2t"], lat, lon),
+        nearest_cell(hourly["mn2t"], lat, lon),
+        start,
+        end,
+        windows,
     )
     box = _daily_mean_c(
-        mean_3x3(hourly["mx2t"], lat, lon), mean_3x3(hourly["mn2t"], lat, lon), start, end
+        mean_3x3(hourly["mx2t"], lat, lon), mean_3x3(hourly["mn2t"], lat, lon), start, end, windows
     )
     metadata = {
         "source": SOURCE,
@@ -118,6 +143,8 @@ def _process(
         "created_utc": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tmean_nearest_c_mean": repr(nearest),
         "tmean_3x3_c_mean": repr(box),
+        "tmin_tmax_adjusted_days": str(daily.tmin_tmax_adjusted_days),
+        **{key: str(value) for key, value in windows.items()},
     }
     return write_parquet(processed_dir / f"{station.city}.parquet", daily, metadata)
 
@@ -157,7 +184,13 @@ def _open_checked(path: Path, station: Station, variables: tuple[str, ...]) -> x
     return ds[list(variables)]
 
 
-def _daily_mean_c(mx2t: xr.DataArray, mn2t: xr.DataArray, start: date, end: date) -> float:
-    """Period mean of daily (tmax + tmin) / 2 for a diagnostic series (degrees C)."""
-    daily: DailySeries = daily_extremes(mx2t, mn2t, start, end)
+def _daily_mean_c(
+    mx2t: xr.DataArray, mn2t: xr.DataArray, start: date, end: date, windows: dict[str, int]
+) -> float:
+    """Period mean of daily (tmax + tmin) / 2 for a diagnostic series (degrees C).
+
+    Uses the station's observation windows (``windows``: the two ``*_window_start_utc_h``);
+    the diagnostics' own midpoint-adjusted day count is not recorded.
+    """
+    daily: DailySeries = daily_extremes(mx2t, mn2t, start, end, **windows)
     return float(np.mean((daily.tmax_c + daily.tmin_c) / 2))

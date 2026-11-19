@@ -7,3 +7,7 @@ wmo_id = "03772"
 icao = "EGLL"
 lat = 51.479
 lon = -0.449
+# Observation windows, whole UTC hours from D 00:00 (spec 002 amendment B, ADR 0005).
+# Met Office: Tmax D 08:50..D+1 08:50, Tmin D-1 08:50..D 08:50, rounded to 09:00.
+tmax_window_start_utc_h = 9
+tmin_window_start_utc_h = -15

@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 2026-11-18_
+_Last updated: 2026-11-19_
 
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
@@ -22,12 +22,17 @@ _Last updated: 2026-11-18_
   - 195 Java tests green; spotless + javadoc clean; 11/11 criteria ticked.
   - Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; SHOULDs/NITs fixed (slope standard error added, look-ahead note, -0.0 shift, huge ranges fail on data).
 
-- **Spec 002 amendment A — multi-year downloads**: branch `feat/002a-multi-year-downloads`, ready for PR.
+- **Spec 002 amendment A — multi-year downloads**: merged to `main` via [PR #8](https://github.com/peter11232313/weather-derivatives-pricer/pull/8) (`e512d11`).
   - `download_years`/`year_chunks`; `--years-per-request` (1–3, default 3); year files split from chunk responses and checked complete.
   - 318 Python tests green; ruff clean; 9/9 amendment criteria ticked. Reviewed by `code-reviewer` (no blockers; SHOULDs/NITs fixed except a pandas 4 `check_freq` test warning).
 
+- **Spec 002 amendment B — per-station observation windows**: branch `feat/002b-observation-windows` (worktree `../wdp-002b` while the full download runs from the main checkout), ready for PR.
+  - Registry offsets (London 9 / −15), windowed `daily_extremes`, `needed_span`, edge-day files, window metadata checked by `publish`; Tmin > Tmax under touching windows → midpoint ([ADR 0005](decisions/0005-per-station-observation-windows.md)).
+  - 462 Python tests green; ruff clean (incl. a 0.5 °C guard on the midpoint, owner OK). Reviewed by `code-reviewer` (no blockers) and `quant-reviewer` (blocker Tmin > Tmax fixed by the owner's option 3).
+  - Manual: London 1991-01-02..1994-12-30 reprocessed (3 midpoint days), published to scratch, loaded by Java (1,459 rows). Monthly HDD new − old: mean −3.94, sd 2.79, range −9.21..+4.25.
+
 ## Next
-1. **Finish the 1991–2024 download** (after merging amendment A: about 12 three-year requests) in the user's own terminal, **one command at a time** (Copernicus rejects parallel requests; ~3 h queue per year; keep the PC awake): `python -m dataprep build --city london --start 1991-01-01 --end 2024-12-31` → expect 12,419 rows. Option: spec 002 amendment for multi-year requests (~3 years per request) to cut the queue waits.
+1. **Finish the 1991–2024 download** (multi-year requests, running in the user's terminal; one command at a time; keep the PC awake). After amendment B is merged: `python -m dataprep build --city london --start 1991-01-01 --end 2024-12-31` again fetches the two edge days (1990-12-31, 2025-01-01) and reprocesses with the 09–09 windows → expect 12,419 rows; republish (the old file lacks window metadata).
 2. Real burn on 1991–2023 London seasons once the data is published.
 3. Real detrended burn on London once 1991–2023 is published (needs ≥ 10 seasons).
 4. Spec 001 amendment: physical range check (−90..60 °C) in the Java loader (decided: Java only).

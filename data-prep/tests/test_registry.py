@@ -17,6 +17,8 @@ wmo_id = "03772"
 icao = "EGLL"
 lat = 51.479
 lon = -0.449
+tmax_window_start_utc_h = 9
+tmin_window_start_utc_h = -15
 """
 
 
@@ -27,6 +29,8 @@ def entry(key: str, lat: float = 51.479, lon: float = -0.449, drop: str | None =
         "icao": '"ZZZZ"',
         "lat": repr(lat),
         "lon": repr(lon),
+        "tmax_window_start_utc_h": "0",
+        "tmin_window_start_utc_h": "0",
     }
     if drop:
         del fields[drop]
@@ -50,6 +54,8 @@ def test_valid_registry_loads_london_station(tmp_path):
             icao="EGLL",
             lat_deg=51.479,
             lon_deg=-0.449,
+            tmax_window_start_utc_h=9,
+            tmin_window_start_utc_h=-15,
         )
     }
 

@@ -22,6 +22,7 @@ from synth import (
     make_era5,
     make_lsm,
     make_station,
+    write_edge_day_file,
     write_lsm_file,
     write_step_file,
     write_year_file,
@@ -129,7 +130,8 @@ def test_cli_download_without_cds_credentials_exits_1(tmp_path, monkeypatch, cap
     registry = tmp_path / "stations.toml"
     registry.write_text(
         '[london]\nstation = "London Heathrow"\nwmo_id = "03772"\nicao = "EGLL"\n'
-        "lat = 51.479\nlon = -0.449\n",
+        "lat = 51.479\nlon = -0.449\n"
+        "tmax_window_start_utc_h = 0\ntmin_window_start_utc_h = 0\n",
         encoding="utf-8",
     )
     code = main(
@@ -181,15 +183,25 @@ def test_raw_file_on_a_different_grid_names_the_path(raw_dir, london):
     assert "era5_london_2024" in str(err.value)
 
 
-def test_step_file_with_scalar_time_is_accepted(raw_dir, processed_dir, london):
+def test_edge_day_file_is_accepted_and_scalar_time_step_file_ignored(
+    raw_dir, processed_dir, london
+):
+    # Amendment B: 2025-01-01 00:00 (12 / -3) comes from the whole-day edge file, as
+    # Copernicus delivers it (valid_time, latitude N->S). A leftover old one-step file with
+    # its time squeezed to a scalar (99 / -99) is never read.
     write_year_file(
         raw_dir, "london", 2024, era5_file(hours("2024-12-31T00:00", "2024-12-31T23:00"))
     )
-    step = era5_file(hours("2025-01-01T00:00", "2025-01-01T00:00"), mx_c=12.0, mn_c=-3.0)
+    mx_c = np.array([12.0] + [30.0] * 23)[:, None, None]
+    mn_c = np.array([-3.0] + [-30.0] * 23)[:, None, None]
+    edge = era5_file(hours("2025-01-01T00:00", "2025-01-01T23:00"), mx_c=mx_c, mn_c=mn_c)
+    write_edge_day_file(raw_dir, "london", date(2025, 1, 1), edge)
+    step = era5_file(hours("2025-01-01T00:00", "2025-01-01T00:00"), mx_c=99.0, mn_c=-99.0)
     write_step_file(raw_dir, "london", 2025, step.isel(valid_time=0))  # time squeezed to scalar
     write_lsm_file(raw_dir, "london", make_lsm(LONDON_LATS, LONDON_LONS))
     out = process(london, date(2024, 12, 31), date(2024, 12, 31), raw_dir, processed_dir, "x", NOW)
     assert pq.read_table(out).column("tmax_c").to_pylist() == pytest.approx([12.0], abs=1e-9)
+    assert pq.read_table(out).column("tmin_c").to_pylist() == pytest.approx([-3.0], abs=1e-9)
 
 
 def test_process_errors_name_the_city(raw_dir, processed_dir, london):
@@ -256,6 +268,8 @@ def _valid_processed(path, **meta_overrides):
         "created_utc": "2026-11-16T12:00:00Z",
         "tmean_nearest_c_mean": "5.0",
         "tmean_3x3_c_mean": "5.0",
+        "tmax_window_start_utc_h": "0",
+        "tmin_window_start_utc_h": "0",
     } | meta_overrides
     series = DailySeries(
         dates=dates, tmax_c=np.array([8.0, 9.0, 7.0]), tmin_c=np.array([1.0, 2.0, 0.0])

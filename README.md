@@ -45,11 +45,30 @@ All under `data/`, which is git-ignored and never committed.
 | `data/pricer/` | `dataprep publish` only, after validation | Java `ParquetTemperatureLoader` |
 
 ## ERA5 → daily temperatures (spec 002)
-Daily Tmax/Tmin come from ERA5 `mx2t`/`mn2t`; UTC day D uses the hourly values stamped
-D 01:00 through D+1 00:00 ([ADR 0002](docs/decisions/0002-daily-tmax-tmin-source.md)).
+Daily Tmax/Tmin come from ERA5 `mx2t`/`mn2t`
+([ADR 0002](docs/decisions/0002-daily-tmax-tmin-source.md)) over each station's own
+observation windows ([ADR 0005](docs/decisions/0005-per-station-observation-windows.md)).
 Hourly fields are interpolated to the settlement station, or the nearest land cell for
 coastal stations ([ADR 0003](docs/decisions/0003-city-value-at-settlement-station.md)).
 Stations are listed in `data-prep/stations.toml`.
+
+**Observation windows** (spec 002 amendment B). Each station has two required whole-hour
+UTC offsets, `tmax_window_start_utc_h` and `tmin_window_start_utc_h`: a window starting at
+D 00:00 + s uses the values stamped D+s+1h .. D+s+24h (each covers the hour before its
+stamp). London (Met Office) is **9 / −15**: Tmax(D) over D 09:00..D+1 09:00, Tmin(D) over
+D−1 09:00..D 09:00 (08:50 rounded to 09:00). 0 / 0 is the UTC day (KNMI, DWD).
+- A settlement month therefore reaches past the calendar month: London January uses
+  weather from 31 Dec 09:00 to 1 Feb 09:00 UTC, so the last day needs D+1 09:00.
+- With touching windows (London) a day that cools steadily through 09:00 can come out
+  with Tmin a few hundredths of a degree above Tmax (ERA5's 08–09 minimum and 09–10
+  maximum do not share 09:00); both are set to their midpoint (HDD and CDD unchanged) and the
+  count is in metadata `tmin_tmax_adjusted_days`. An excess above 0.5 °C is still an
+  error (corrupt-data guard).
+- Compared with the old 00–00 day, London monthly HDD is about 4 HDD lower on average
+  (1991–1994: mean −3.9, sd 2.8, worst −9.2): a 00–24 Tmin window catches parts of two
+  nights. Files built before amendment B lack the window metadata, fail `publish`, and must
+  be reprocessed (`data/processed/london.parquet`) and republished (`data/pricer/`); never
+  mix them with new ones: burn results on the old files are not comparable.
 
 **One-time setup for downloads**
 1. Create a free account at the Copernicus Climate Data Store and accept the ERA5
@@ -73,8 +92,14 @@ python -m dataprep publish  --city london
 `download` skips files already present, so an interrupted run can simply be restarted.
 Missing years are fetched **up to 3 consecutive years per request**
 (`--years-per-request N`, 1–3, default 3, on `download` and `build`); each response is
-split back into one complete year file per year. London 1991–2024 is about 14 Copernicus
-requests (1 land-sea mask + 12 three-year chunks + 1 next-year step). Each request waits
+split back into one complete year file per year. London 1991–2024 is about 15 Copernicus
+requests (1 land-sea mask + 12 three-year chunks + 2 edge days). Hours the windows need
+outside the range's years (at most the day before the start and the day after the end)
+come from that year's file if present, else a one-day **edge-day file**
+`era5_<city>_<YYYYMMDD>.nc` (all 24 hours; for London 1991–2024: `19901231` and
+`20250101`). Edge-day files are never refreshed; delete one to fetch it again (e.g. after
+preliminary ERA5T data is finalised). The old one-step `era5_<city>_<YYYY>0101T00.nc` is
+no longer used and can be deleted by hand. Each request waits
 roughly 3 hours in the queue, so allow a day; run **one command at a time** (Copernicus
 rejects parallel requests) and keep the PC awake. If Copernicus rejects a 3-year request
 as too large, rerun with `--years-per-request 1`. Raw files are about 60 MB; the
@@ -102,7 +127,8 @@ download, and the error lists the incomplete years; a rerun requests only those.
 
 ## HDD index (spec 001)
 Daily mean `T = (tmaxC + tminC) / 2`; daily `HDD = max(0, baseC − T)`; the cumulative
-index sums daily HDD over an inclusive range of UTC days. Default base 18 °C.
+index sums daily HDD over an inclusive range of settlement days (`LocalDate`; each
+station's observation windows, ADR 0005). Default base 18 °C.
 
 ```java
 DailyTemps temps = new ParquetTemperatureLoader(Path.of("data/pricer")).load("london");
@@ -110,7 +136,7 @@ double hddDegC = HddIndex.cumulativeHddDegC(
     temps, LocalDate.of(2023, 11, 1), LocalDate.of(2024, 3, 31)); // base 18 °C
 ```
 
-Input file: one row per UTC day with `date` (Parquet DATE), `tmax_c` and `tmin_c`
+Input file: one row per settlement day with `date` (Parquet DATE), `tmax_c` and `tmin_c`
 (float64; float32 accepted), Snappy, gzip or uncompressed. Missing days, duplicate
 dates, nulls, non-finite values and `tmin_c > tmax_c` are rejected with an error naming
 the date, column or path; nothing is skipped or interpolated.

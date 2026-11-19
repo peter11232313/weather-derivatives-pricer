@@ -18,6 +18,7 @@ from synth import (
     make_era5,
     make_lsm,
     make_station,
+    write_edge_day_file,
     write_lsm_file,
     write_step_file,
     write_year_file,
@@ -122,8 +123,9 @@ def test_spec_hour_alignment_example_end_to_end(raw_dir, processed_dir):
 
 
 def test_31_december_uses_1_january_midnight_from_next_year_file(raw_dir, processed_dir):
-    # 2024 file's 00:00 = 12 / -3 must be used; its later steps (30 / -30) and the
-    # leftover one-step file (20 / -20) are decoys. Expected 2023-12-31: 12.0 / -3.0.
+    # 2024 file's 00:00 = 12 / -3 must be used; its later steps (30 / -30), the
+    # leftover one-step file (20 / -20) and a stray edge-day file for 2024-01-01
+    # (21 / -21; the 2024 year file wins) are decoys. Expected 2023-12-31: 12.0 / -3.0.
     write_year_file(
         raw_dir,
         "london",
@@ -147,6 +149,12 @@ def test_31_december_uses_1_january_midnight_from_next_year_file(raw_dir, proces
     write_step_file(
         raw_dir, "london", 2024, temps(hours("2024-01-01T00:00", "2024-01-01T00:00"), 20.0, -20.0)
     )
+    write_edge_day_file(
+        raw_dir,
+        "london",
+        date(2024, 1, 1),
+        temps(hours("2024-01-01T00:00", "2024-01-01T23:00"), 21.0, -21.0),
+    )
     hourly = load_hourly(make_station(), date(2023, 12, 31), date(2023, 12, 31), raw_dir)
     times = pd.DatetimeIndex(hourly["time"].values)
     assert times.is_unique
@@ -159,8 +167,10 @@ def test_31_december_uses_1_january_midnight_from_next_year_file(raw_dir, proces
     np.testing.assert_allclose(tmin, [-3.0], atol=1e-9)
 
 
-def test_final_year_uses_new_year_step_file(raw_dir, processed_dir):
-    # No 2025 year file: 2024-12-31 takes 2025-01-01 00:00 (12 / -3) from the one-step file.
+def test_final_year_uses_edge_day_file(raw_dir, processed_dir):
+    # No 2025 year file: 2024-12-31 takes 2025-01-01 00:00 (12 / -3) from the edge-day file
+    # era5_london_20250101.nc; its later hours (30 / -30) are outside the 0 / 0 windows and
+    # the leftover old one-step file (20 / -20) must not be read.
     write_year_file(
         raw_dir,
         "london",
@@ -171,8 +181,18 @@ def test_final_year_uses_new_year_step_file(raw_dir, processed_dir):
             [-40.0] + [1.0] * 23,
         ),
     )
+    write_edge_day_file(
+        raw_dir,
+        "london",
+        date(2025, 1, 1),
+        temps(
+            hours("2025-01-01T00:00", "2025-01-01T23:00"),
+            [12.0] + [30.0] * 23,
+            [-3.0] + [-30.0] * 23,
+        ),
+    )
     write_step_file(
-        raw_dir, "london", 2025, temps(hours("2025-01-01T00:00", "2025-01-01T00:00"), 12.0, -3.0)
+        raw_dir, "london", 2025, temps(hours("2025-01-01T00:00", "2025-01-01T00:00"), 20.0, -20.0)
     )
     out = run(raw_dir, processed_dir, date(2024, 12, 31), date(2024, 12, 31))
     dates, tmax, tmin, _ = read(out)
@@ -182,8 +202,9 @@ def test_final_year_uses_new_year_step_file(raw_dir, processed_dir):
 
 
 def test_multi_year_load_uses_each_hour_once(raw_dir):
-    # 2024-01-01 00:00 exists in the 2024 file (7.0) and in a leftover step file (20.0).
-    # It must appear once, from the year file; nothing outside the window is loaded.
+    # 2024-01-01 00:00 exists in the 2024 file (7.0), in a leftover step file (20.0) and
+    # in a stray edge-day file (21.0). It must appear once, from the year file; nothing
+    # outside the window is loaded.
     write_year_file(
         raw_dir, "london", 2023, temps(hours("2023-12-31T00:00", "2023-12-31T23:00"), 5.0, 1.0)
     )
@@ -195,6 +216,12 @@ def test_multi_year_load_uses_each_hour_once(raw_dir):
     )
     write_step_file(
         raw_dir, "london", 2024, temps(hours("2024-01-01T00:00", "2024-01-01T00:00"), 20.0, -20.0)
+    )
+    write_edge_day_file(
+        raw_dir,
+        "london",
+        date(2024, 1, 1),
+        temps(hours("2024-01-01T00:00", "2024-01-01T23:00"), 21.0, -21.0),
     )
     hourly = load_hourly(make_station(), date(2023, 12, 31), date(2024, 1, 1), raw_dir)
     times = pd.DatetimeIndex(hourly["time"].values)
@@ -211,7 +238,7 @@ def test_missing_year_file_raises_naming_path(raw_dir):
     assert "era5_london_2024" in str(err.value)
 
 
-def test_missing_final_step_and_next_year_file_raises_naming_path(raw_dir):
+def test_missing_final_edge_day_and_next_year_file_raises_naming_path(raw_dir):
     write_year_file(
         raw_dir, "london", 2024, temps(hours("2024-12-31T00:00", "2024-12-31T23:00"), 5.0, 1.0)
     )
@@ -231,11 +258,11 @@ def test_full_year_row_count_sorted_without_gaps(raw_dir, processed_dir, year, n
         year,
         temps(hours(f"{year}-01-01T00:00", f"{year}-12-31T23:00"), 8.0, 2.0, dtype="float32"),
     )
-    write_step_file(
+    write_edge_day_file(
         raw_dir,
         "london",
-        year + 1,
-        temps(hours(f"{year + 1}-01-01T00:00", f"{year + 1}-01-01T00:00"), 8.0, 2.0),
+        date(year + 1, 1, 1),
+        temps(hours(f"{year + 1}-01-01T00:00", f"{year + 1}-01-01T23:00"), 8.0, 2.0),
     )
     out = run(raw_dir, processed_dir, date(year, 1, 1), date(year, 12, 31))
     dates, tmax, tmin, kv = read(out)

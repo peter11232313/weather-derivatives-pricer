@@ -136,6 +136,25 @@ Contents
 | 5c.11 | Code review: a failed request after an incomplete year hid the incomplete-year message; a rejected 3-year request gave no hint. | The failed-request error now appends the incomplete years and, for multi-year chunks, suggests `--years-per-request 1`. |
 | 5c.12 | Code review: nothing tested that packed int16 data (scale/offset/_FillValue, integer time units) survives the year-file rewrite. | Test added; it passed first time, confirming the reviewer's manual check. |
 | 5c.13 | README still said ~36 requests and did not mention the option or the unfinished-year behaviour. | README, spec text, CHANGELOG (Added + Changed) updated: ~14 requests for London 1991–2024. |
+| 5c.14 | Shipping. | Merged via PR #8 (`e512d11`). The full London build was restarted with multi-year requests. |
+
+## 5d. Spec 002 amendment B — per-station observation windows
+
+| # | Problem / confusion | Resolution |
+| --- | --- | --- |
+| 5d.1 | The owner asked whether the code supports each station's own Tmax/Tmin windows (London 08:50–08:50, Paris 06–06 / 18–18, Amsterdam and Essen 00–00). | No: every day is the UTC day D 01:00..D+1 00:00 for both Tmax and Tmin. Correct for Amsterdam and Essen; wrong for London and Paris. |
+| 5d.2 | Why was 00–00 used for London? | Not a London decision. It came from the project-wide "dates are UTC `LocalDate`" rule and spec 001's "UTC calendar day"; ADR 0002 only chose `mx2t`/`mn2t` and aligned the hours to that day. ADR 0002 flagged that a 09–09 day "would need a separate decision", which was never made. Lesson: a default that is really a contract term must be checked per contract. |
+| 5d.3 | Are the windows UTC or local time (which would shift with summer time)? | **UTC** (owner confirmed). |
+| 5d.4 | ERA5 `mx2t`/`mn2t` cover whole hours; 08:50 cannot be matched. | Proposed: round to 09:00 (Met Office climatological day 09–09 UTC). |
+| 5d.5 | Windows reaching into the day before `start` (London Tmin) or after `end` need hours outside the downloaded years. | Proposed: whole-day edge files replace the one-step `…0101T00` file; two extra requests for London 1991–2024. |
+| 5d.6 | Order of work. | Owner: fix the windows, then reprocess London first and compare monthly HDD old vs new. The running download is unaffected (re-processing only). |
+| 5d.7 | The full download runs from the main checkout and lazily imports `pipeline`/`publish` at its end; editing that tree mid-run could crash it or mix old and new code. | Work in a git worktree (`../wdp-002b`) with the same venv and `PYTHONPATH=src`, so the worktree code is imported; the manual comparison writes only to scratch folders. |
+| 5d.8 | Spec decisions approved: 08:50 → 09:00; whole-day edge files replace the one-step file; window fields required (no default); Tmax(D) = window starting on D, Tmin(D) = window ending on D; London only. Planner questions: offsets keyword-only with no default; test station 0/0; `publish` also checks the windows overlap or touch. | Owner OK. Existing tests changed only as approved (fixtures gain fields/keys, one-step-file tests rewritten as edge-day tests, amendment A criterion 9 rewritten). |
+| 5d.9 | Reprocessing real London data failed: `tmin_c 11.3018 > tmax_c 11.2728 on 1991-11-08`. 3 of 1,459 days (≤ 0.07 °C). Tmin came from 08–09 and Tmax from 09–10 on mornings cooling steadily through 09:00; ERA5's hourly extremes do not share the 09:00 instant. The quant reviewer raised the same as a BLOCKER; the Java `DailyTemp` also rejects tmin > tmax. | Owner chose **option 3**: with touching windows set both to the midpoint (≈ T(09:00), HDD unchanged), count in metadata `tmin_tmax_adjusted_days`; overlapping windows keep the error. Rejected: allowing tmin > tmax (Java change) and a tolerance (arbitrary). Spec decision 6, ADR 0005. |
+| 5d.10 | Size of the change. | London monthly HDD (Feb 1991..Nov 1994) new − old: mean −3.94, sd 2.79, −9.21..+4.25; Nov–Mar mean −2.59, lower in 14 of 18. A systematic time-of-observation bias, not noise: a 00–24 Tmin window catches two nights. Burn and detrended burn must be rerun on the new file. |
+| 5d.11 | Code review: a one-day range with offsets 23/23 returned the same edge day twice; README still described the UTC day; `publish` accepted `"09"`/`"-0"`. | Edge days de-duplicated; publish requires canonical integers; README, CHANGELOG, PROGRESS updated; tests added. |
+| 5d.12 | Manual Java check on the new file. | Java loader reads it (1,459 rows); tmin == tmax on the 3 midpoint days; Jan 1994 HDD 395.197 matches Python. |
+| 5d.13 | Quant re-review: the midpoint accepted any size of Tmin > Tmax, so a corrupt or swapped file would be silently flattened. | Owner OK: guard at 0.5 °C (real gaps ≤ 0.07); a larger excess is an error naming the date. Wording: HDD and CDD unchanged; republish paths named. |
 
 ## 6. Workflow lessons
 
@@ -152,7 +171,8 @@ Contents
 | --- | --- |
 | Hardwood Parquet reader; Snappy only from data-prep | [ADR 0001](decisions/0001-parquet-reader.md), spec 001 |
 | Full-precision index; rounding is a contract term | spec 001, [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md) |
-| `mx2t`/`mn2t`, day = D 01:00..D+1 00:00 UTC | [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) |
+| `mx2t`/`mn2t`, day = D 01:00..D+1 00:00 UTC | [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) (hour alignment superseded) |
+| Per-station observation windows; London 09–09 UTC; edge-day files; midpoint when Tmin > Tmax under touching windows | spec 002 amendment B, [ADR 0005](decisions/0005-per-station-observation-windows.md) |
 | Bilinear to the station; nearest land cell; zero-weight cells ignored | [ADR 0003](decisions/0003-city-value-at-settlement-station.md) |
 | raw / processed / pricer folders with validating publish | spec 002 |
 | Zip downloads merged per GRIB step type (option A) | spec 002 (amended) |
@@ -163,6 +183,11 @@ Contents
 | One Copernicus download at a time | PROGRESS.md |
 
 ## 8. Still open
+
+- Spec 002 amendment B: after merge, rerun the London build (two edge-day requests) and
+  republish; then the real burn and detrended burn on 1991–2023.
+- Paris, Amsterdam, Essen: add to `stations.toml` with confirmed coordinates (windows
+  6/−6, 0/0, 0/0); for a long Essen history check the older DWD observation day.
 
 - Finish the 1991–2024 London download; then the full burn on 1991–2023 seasons.
 - Live 3-year Copernicus test request (scratchpad `probe_multiyear.py`, owner's terminal)

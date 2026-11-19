@@ -43,9 +43,19 @@ def make_station(
     lon_deg: float = -0.449,
     city: str = "london",
     station: str = "London Heathrow",
+    tmax_window_start_utc_h: int = 0,
+    tmin_window_start_utc_h: int = 0,
 ) -> Station:
+    """A registry station; observation windows default to the UTC day (0 / 0)."""
     return Station(
-        city=city, station=station, wmo_id="03772", icao="EGLL", lat_deg=lat_deg, lon_deg=lon_deg
+        city=city,
+        station=station,
+        wmo_id="03772",
+        icao="EGLL",
+        lat_deg=lat_deg,
+        lon_deg=lon_deg,
+        tmax_window_start_utc_h=tmax_window_start_utc_h,
+        tmin_window_start_utc_h=tmin_window_start_utc_h,
     )
 
 
@@ -195,6 +205,7 @@ def is_lsm_request(request: dict[str, Any]) -> bool:
 
 
 def is_single_step_request(request: dict[str, Any]) -> bool:
+    """The old (pre amendment B) one-step ``YYYY-01-01 00:00`` request; must never be sent."""
     return (
         not is_lsm_request(request)
         and as_list(request.get("month", [])) in (["01"], ["1"])
@@ -202,6 +213,23 @@ def is_single_step_request(request: dict[str, Any]) -> bool:
         and len(as_list(request.get("time", []))) == 1
         and as_list(request["time"])[0].startswith("00:00")
     )
+
+
+def is_edge_day_request(request: dict[str, Any]) -> bool:
+    """A temperature request for every hour (24 times) of exactly one day (amendment B)."""
+    return (
+        not is_lsm_request(request)
+        and len(as_list(request.get("year", []))) == 1
+        and len(as_list(request.get("month", []))) == 1
+        and len(as_list(request.get("day", []))) == 1
+        and len(as_list(request.get("time", []))) == 24
+    )
+
+
+def edge_day_of(request: dict[str, Any]) -> date:
+    """The day an edge-day request asks for."""
+    (year,), (month,), (day,) = (as_list(request[k]) for k in ("year", "month", "day"))
+    return date(int(year), int(month), int(day))
 
 
 # --------------------------------------------------------------------------- fake CDS
@@ -334,12 +362,19 @@ class FakeCdsClient:
         ds.to_netcdf(target_path)
 
     def temperature_years(self) -> list[list[str]]:
-        """``year`` lists of the full-period temperature requests (not lsm, not one-step)."""
+        """``year`` lists of the full-period temperature requests (not lsm, not edge-day).
+
+        An old-style one-step request is deliberately NOT excluded, so a stray one shows up.
+        """
         return [
             as_list(r["year"])
             for r in self.requests
-            if not is_lsm_request(r) and not is_single_step_request(r)
+            if not is_lsm_request(r) and not is_edge_day_request(r)
         ]
+
+    def edge_days(self) -> list[date]:
+        """Days of the edge-day requests, in request order."""
+        return [edge_day_of(r) for r in self.requests if is_edge_day_request(r)]
 
     def _grid(self, request: dict[str, Any]) -> tuple[list[float], list[float]]:
         if self.grid_from_area and "area" in request:
@@ -468,7 +503,13 @@ def write_year_file(raw_dir: Path, city: str, year: int, ds: xr.Dataset) -> Path
 
 
 def write_step_file(raw_dir: Path, city: str, year: int, ds: xr.Dataset) -> Path:
+    """The old one-step file (``era5_<city>_<YYYY>0101T00.nc``); now only a decoy."""
     return write_nc(ds, raw_dir / f"era5_{city}_{year}0101T00.nc")
+
+
+def write_edge_day_file(raw_dir: Path, city: str, day: date, ds: xr.Dataset) -> Path:
+    """An edge-day file ``era5_<city>_<YYYYMMDD>.nc`` (amendment B)."""
+    return write_nc(ds, raw_dir / f"era5_{city}_{day:%Y%m%d}.nc")
 
 
 def write_lsm_file(raw_dir: Path, city: str, lsm: xr.DataArray) -> Path:
