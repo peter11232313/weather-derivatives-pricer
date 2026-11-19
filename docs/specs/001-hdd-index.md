@@ -82,3 +82,34 @@ None open. Resolved 2026-11-16:
 - **Rounding:** the index engine stays at full precision. Settlement rounding (e.g. daily HDD to 0.1 °C·day) is a contract term, specified per contract in the payoff spec.
 - **Daily Tmax/Tmin source:** ERA5 `mx2t`/`mn2t`, UTC day D = values stamped D 01:00..D+1 00:00 — [ADR 0002](../decisions/0002-daily-tmax-tmin-source.md).
 - **City value:** interpolated to each settlement station's coordinates (nearest land cell for coastal stations) — [ADR 0003](../decisions/0003-city-value-at-settlement-station.md).
+
+## Amendment A — physical range check (approved 2026-11-20)
+
+### Why
+The loader rejects nulls, non-finite values and `tminC > tmaxC`, but a corrupt or
+wrong-unit file still loads: values left in kelvin (283.15 / 275.15) give daily HDD
+`max(0, 18 − 279.15) = 0`, a silent season index of 0. Implements spec 002 decision 3
+(range check in the Java loader only).
+
+### Scope
+In:
+- `ParquetTemperatureLoader` rejects any `tmax_c` or `tmin_c` outside **−90.0..60.0 °C
+  inclusive** (records: −89.2 °C, 56.7 °C). Limits are named constants in °C.
+- The error is a `TemperatureDataException` naming the date, column, value and file.
+
+Out:
+- `DailyTemp` / `HddIndex` unchanged: in-memory temperatures (e.g. tests) have no range limit.
+- Per-station or seasonal plausibility checks; any Python change.
+
+### Acceptance criteria
+- [ ] Given a file with `tmax_c = 60.0` and `tmin_c = −90.0`, when loaded, then it loads (limits inclusive).
+- [ ] Given `tmax_c = 60.000001` on 2024-01-02, when loaded, then a `TemperatureDataException` names `2024-01-02`, `tmax_c`, the value and the file path.
+- [ ] Given `tmin_c = −90.5`, when loaded, then the error names `tmin_c`.
+- [ ] Given a 3-day file still in kelvin (283.15 / 275.15), when loaded, then it is rejected (instead of a silent HDD of 0.0).
+- [ ] Given float32 columns, then the check applies after widening: `60.0f` loads, `60.5f` fails.
+- [ ] Given NaN or ±∞, then the existing "non-finite" error is raised, not a range error.
+- [ ] Given a kelvin `tmax_c` with a normal `tmin_c`, then the range error is reported (range check runs before the `tminC > tmaxC` check).
+- [ ] All existing Java tests green; `load()` Javadoc lists the new failure; README, CHANGELOG, PROGRESS and the development log updated.
+
+### Decision
+Check in the loader only, not in `DailyTemp` (spec 002 decision 3; owner OK 2026-11-20).
