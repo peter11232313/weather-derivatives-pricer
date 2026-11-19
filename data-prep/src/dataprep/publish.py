@@ -11,19 +11,27 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from dataprep.errors import PublishError
+from dataprep.registry import (
+    MAX_WINDOW_GAP_H,
+    MAX_WINDOW_START_H,
+    TMAX_WINDOW_FIELD,
+    TMIN_WINDOW_FIELD,
+)
 from dataprep.write import REQUIRED_METADATA_KEYS
 
 _COLUMNS = {"date": pa.date32(), "tmax_c": pa.float64(), "tmin_c": pa.float64()}
 _METHODS = frozenset({"bilinear", "nearest_land"})
 _SOURCE = "ERA5 mx2t/mn2t"
 _REGISTRY_VERSION = re.compile(r"[0-9a-f]{12}")
+_WINDOW_HOURS = re.compile(r"-?[0-9]{1,2}")
 
 
 def validate(path: Path, *, name: Path | None = None) -> None:
     """Check a processed file against the spec 001/002 contract.
 
     Checks: columns ``date`` (DATE), ``tmax_c``, ``tmin_c`` (DOUBLE); Snappy compression;
-    all required metadata keys with valid ``source``, ``method`` and ``registry_version``;
+    all required metadata keys with valid ``source``, ``method``, ``registry_version``
+    and observation windows (integers in -23..23, at most 24 h apart);
     no nulls; dates sorted, unique and without gaps; row count equal to the days in the
     metadata ``start..end``; no NaN; ``tmin_c <= tmax_c``.
 
@@ -69,6 +77,18 @@ def validate(path: Path, *, name: Path | None = None) -> None:
         raise PublishError(
             f"{label}: metadata registry_version {kv['registry_version']!r} is not "
             "12 lowercase hex characters"
+        )
+    for key in (TMAX_WINDOW_FIELD, TMIN_WINDOW_FIELD):
+        value = kv[key]
+        if not _WINDOW_HOURS.fullmatch(value) or abs(int(value)) > MAX_WINDOW_START_H:
+            raise PublishError(
+                f"{label}: metadata {key} {value!r} is not a whole number of hours in "
+                f"-{MAX_WINDOW_START_H}..{MAX_WINDOW_START_H}"
+            )
+    if abs(int(kv[TMAX_WINDOW_FIELD]) - int(kv[TMIN_WINDOW_FIELD])) > MAX_WINDOW_GAP_H:
+        raise PublishError(
+            f"{label}: metadata {TMAX_WINDOW_FIELD} and {TMIN_WINDOW_FIELD} are more than "
+            f"{MAX_WINDOW_GAP_H} h apart"
         )
     try:
         start, end = date.fromisoformat(kv["start"]), date.fromisoformat(kv["end"])

@@ -16,7 +16,7 @@ import shutil
 import zipfile
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from dataprep.daily import needed_span
 from dataprep.errors import DataError, DownloadError
 from dataprep.load import open_era5
 from dataprep.registry import Station
@@ -82,19 +83,48 @@ def year_file(raw_dir: Path, city: str, year: int) -> Path:
     return raw_dir / f"era5_{city}_{year}.nc"
 
 
-def new_year_step_file(raw_dir: Path, city: str, year: int) -> Path:
-    """Return ``<raw_dir>/era5_<city>_<year>0101T00.nc`` (the single step ``year``-01-01 00:00)."""
-    return raw_dir / f"era5_{city}_{year}0101T00.nc"
-
-
 def edge_day_file(raw_dir: Path, city: str, day: date) -> Path:
     """Return ``<raw_dir>/era5_<city>_<YYYYMMDD>.nc`` (every hour of one edge day)."""
-    raise NotImplementedError("spec 002 amendment B")
+    return raw_dir / f"era5_{city}_{day:%Y%m%d}.nc"
 
 
 def download_edge_day(client: CdsClient, station: Station, day: date, raw_dir: Path) -> Path:
-    """Download every hour (00:00..23:00) of ``day`` of ``mx2t`` and ``mn2t``."""
-    raise NotImplementedError("spec 002 amendment B")
+    """Download every hour (00:00..23:00) of ``day`` of ``mx2t`` and ``mn2t``.
+
+    Used for the day before or after a range when that day's year file is absent (spec 002
+    amendment B). The request is a year request for one day; the result is checked for
+    exactly the 24 hours of ``day`` and written with temp file + rename. An existing file
+    is not downloaded again.
+
+    Returns:
+        The edge-day file path.
+
+    Raises:
+        DownloadError: If the download fails, is not netCDF with both variables, or lacks
+            or repeats an hour of ``day`` (names the day); no partial file is left.
+    """
+    target = edge_day_file(raw_dir, station.city, day)
+    if target.exists():
+        return target
+    request = _request(
+        station,
+        [MX2T, MN2T],
+        years=[day.year],
+        months=[f"{day.month:02d}"],
+        days=[f"{day.day:02d}"],
+        times=[f"{h:02d}:00" for h in range(24)],
+    )
+    stem = raw_dir / f"era5_{station.city}_{day:%Y%m%d}.download"
+    with _retrieved(client, request, stem, TEMPERATURE_VARS) as (_, ds):
+        start = pd.Timestamp(day)
+        day_ds, problem = _split_hours(ds, start, start + pd.Timedelta(days=1))
+        if problem is not None:
+            raise DownloadError(
+                f"incomplete ERA5 edge day {day.isoformat()} for {station.city} "
+                f"({problem}; {target}); rerun to request it again"
+            )
+        _write_atomic(day_ds, target)
+    return target
 
 
 def lsm_file(raw_dir: Path, city: str) -> Path:
@@ -208,22 +238,6 @@ def download_years(
     return list(targets.values())
 
 
-def download_new_year_step(client: CdsClient, station: Station, year: int, raw_dir: Path) -> Path:
-    """Download the single step ``year``-01-01 00:00 of ``mx2t`` and ``mn2t``.
-
-    Only needed after the final year of a range whose next year file is absent (ADR 0002).
-
-    Raises:
-        DownloadError: If the download fails or is not netCDF with both variables; no
-            partial file is left.
-    """
-    request = _request(
-        station, [MX2T, MN2T], years=[year], months=["01"], days=["01"], times=["00:00"]
-    )
-    target = new_year_step_file(raw_dir, station.city, year)
-    return _fetch(client, request, target, TEMPERATURE_VARS)
-
-
 def download_lsm(client: CdsClient, station: Station, raw_dir: Path) -> Path:
     """Download the land-sea mask (one time step) in its own request.
 
@@ -251,10 +265,12 @@ def download_range(
     *,
     years_per_request: int = DEFAULT_YEARS_PER_REQUEST,
 ) -> list[Path]:
-    """Download everything needed to process ``start..end`` (inclusive UTC days).
+    """Download everything needed to process ``start..end`` (inclusive settlement days).
 
-    That is the land-sea mask, one file per year touched, and the 00:00 step after ``end``
-    (from the next year's file if present, else a one-step file).
+    That is the land-sea mask, one file per year of the range, and the hours the station's
+    windows need outside the range (at most the day before ``start`` and the day after
+    ``end``): from that day's year file if present, else an edge-day file (spec 002
+    amendment B).
 
     Args:
         client: The CDS client.
@@ -282,14 +298,17 @@ def download_range(
         raw_dir,
         years_per_request=years_per_request,
     )
-    # Day `end` ends at end+1 00:00 (ADR 0002); only new if that is in the next year.
-    after = end + timedelta(days=1)
-    if after.year != end.year:
-        next_year = year_file(raw_dir, station.city, after.year)
-        if next_year.exists():
-            paths.append(next_year)
+    first, last = needed_span(
+        station.tmax_window_start_utc_h, station.tmin_window_start_utc_h, start, end
+    )
+    edge_days = [d for d in (first.date(), last.date()) if not start <= d <= end]
+    for day in edge_days:
+        own_year = year_file(raw_dir, station.city, day.year)
+        if own_year.exists():
+            if own_year not in paths:
+                paths.append(own_year)
         else:
-            paths.append(download_new_year_step(client, station, after.year, raw_dir))
+            paths.append(download_edge_day(client, station, day, raw_dir))
     return paths
 
 
@@ -325,7 +344,7 @@ def _fetch(
 ) -> Path:
     """Retrieve and check (``_retrieved``), then rename the response into place unchanged.
 
-    Used for the land-sea mask and the next-year step; an existing target is not fetched.
+    Used for the land-sea mask; an existing target is not fetched.
     """
     if target.exists():
         return target
@@ -385,13 +404,23 @@ def _split_year(ds: xr.Dataset, year: int) -> tuple[xr.Dataset, str | None]:
     """Select the hours of ``year``, [Y-01-01 00:00, Y+1-01-01 00:00), from ``ds``, in order.
 
     Returns:
-        The year's dataset sorted by time, and ``None`` if every hour is present exactly
-        once, else a description of the first missing or repeated hour. Hours outside the
-        year are ignored.
+        See ``_split_hours``.
+    """
+    start = pd.Timestamp(year=year, month=1, day=1)
+    return _split_hours(ds, start, pd.Timestamp(year=year + 1, month=1, day=1))
+
+
+def _split_hours(
+    ds: xr.Dataset, start: pd.Timestamp, stop: pd.Timestamp
+) -> tuple[xr.Dataset, str | None]:
+    """Select the hours in [``start``, ``stop``) from ``ds``, in order.
+
+    Returns:
+        The selected dataset sorted by time, and ``None`` if every hour is present exactly
+        once, else a description of the first missing or repeated hour. Hours outside
+        [``start``, ``stop``) are ignored.
     """
     time_name = "valid_time" if "valid_time" in ds.coords else "time"
-    start = pd.Timestamp(year=year, month=1, day=1)
-    stop = pd.Timestamp(year=year + 1, month=1, day=1)
     times = pd.DatetimeIndex(ds[time_name].values)
     in_year = np.flatnonzero((times >= start) & (times < stop))
     in_year = in_year[np.argsort(times[in_year], kind="stable")]
@@ -419,7 +448,7 @@ def _write_atomic(ds: xr.Dataset, target: Path) -> None:
         out.to_netcdf(tmp)
         os.replace(tmp, target)
     except (OSError, ValueError, RuntimeError) as e:
-        raise DownloadError(f"cannot write year file {target}: {e}") from e
+        raise DownloadError(f"cannot write raw file {target}: {e}") from e
     finally:
         tmp.unlink(missing_ok=True)
 

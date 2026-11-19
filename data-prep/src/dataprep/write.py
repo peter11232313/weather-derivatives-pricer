@@ -31,6 +31,8 @@ REQUIRED_METADATA_KEYS = (
     "created_utc",
     "tmean_nearest_c_mean",
     "tmean_3x3_c_mean",
+    "tmax_window_start_utc_h",
+    "tmin_window_start_utc_h",
 )
 
 
