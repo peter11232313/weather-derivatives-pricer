@@ -43,3 +43,11 @@ Contracts settle on each station's own observation windows, all in UTC:
   offsets are recorded in the file metadata and checked by `publish`.
 - The 10-minute London difference (08:50 vs 09:00) is a small, accepted basis on top of
   the ERA5-vs-station difference.
+- **Systematic HDD shift, not noise**: London monthly HDD under 09–09 is about 4 lower than
+  under 00–24 (1991–1994: mean −3.94, sd 2.79, worst −9.21), because a 00–24 Tmin window
+  catches parts of two nights. Burn and detrended-burn results must be recomputed; old
+  UTC-day files must not be mixed with new ones (they lack the window metadata and fail
+  `publish`; the Java loader does not check the metadata).
+- A settlement month reaches past the calendar month (London January: 31 Dec 09:00 ..
+  1 Feb 09:00 UTC); comparisons with calendar-month data will differ at the edges.
+- Edge-day files are never refreshed; delete one to re-fetch it after ERA5T is finalised.

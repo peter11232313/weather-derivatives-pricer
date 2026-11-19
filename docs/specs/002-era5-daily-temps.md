@@ -286,20 +286,20 @@ DST windows; ERA5-vs-station bias.
 → 2024-01-16: `tmin_c = −4.0` (window stamps 01-15 10:00..01-16 09:00).
 
 ### Acceptance criteria
-- [ ] Given the London worked example, then 2024-01-15 has `tmax_c = 11.0`, `tmin_c = 2.0`; 2024-01-14 has `tmax_c = 14.0`; 2024-01-16 has `tmin_c = −4.0`.
-- [ ] Given offsets 6 / −6 (Paris), then Tmax(D) uses exactly the stamps D 07:00..D+1 06:00 and Tmin(D) exactly D−1 19:00..D 18:00 (a value just outside each window does not count; known answer in the test).
-- [ ] Given offsets 0 / 0, then every existing spec 002 criterion still holds, including the hour-alignment example (2024-01-01 → 12.0 / −3.0).
-- [ ] Given a registry entry with a window field missing, a bool or float, a value outside −23..23, or |tmax − tmin| > 24, then an error names the entry and the field.
-- [ ] Given London 1991-01-01..1991-12-31 with year files 1991 and 1992 present, then Tmin(1991-01-01) reads 1990-12-31 10:00..23:00 from the edge-day file `era5_london_19901231.nc` and Tmax(1991-12-31) reads 1992-01-01 00:00..09:00 from the 1992 year file; no hour is read twice.
-- [ ] Given a missing hourly step anywhere in the needed span (including edge-day hours), then an error names the missing timestamp.
-- [ ] Given `download` for London 1991..2024 with every year file present, then exactly two temperature requests are sent: 1990-12-31 and 2025-01-01, each one day with all 24 times and otherwise the same keys as a year request; given a 0 / 0 station, no previous-day request is sent; no day is requested when its year file exists; no `…0101T00` file is requested.
-- [ ] Given an edge-day response missing an hour, then a `DownloadError` names the day and no file is left.
-- [ ] Given a processed file, then its metadata has `tmax_window_start_utc_h` and `tmin_window_start_utc_h` equal to the registry; `publish` rejects a file with either missing or not an integer in −23..23; the diagnostics use the same windows (known answer in the test).
-- [ ] `stations.toml` London has `tmax_window_start_utc_h = 9`, `tmin_window_start_utc_h = -15`.
-- [ ] Given touching windows (|tmax − tmin| = 24, e.g. London) and a day whose Tmin exceeds its Tmax (the 1991-11-08 shape: mn2t stamped D 09:00 = 11.302, mx2t stamped D 10:00 = 11.273, falling all day), then that day's `tmin_c` and `tmax_c` are both the midpoint (11.2875), HDD equals the unadjusted `max(0, 18 − (Tmax + Tmin)/2)`, and metadata `tmin_tmax_adjusted_days` counts such days ("0" when none).
-- [ ] Given overlapping windows (|tmax − tmin| < 24, e.g. 0 / 0 or 6 / −6) and a day with Tmin > Tmax, then it is still an error naming the date (it cannot happen with consistent data).
-- [ ] **Manual:** London reprocessed with the new windows over the years already downloaded; monthly HDD (base 18 °C) old vs new reported in the PR and the development log; the Java contract check rerun on the new file.
-- [ ] `ruff check`, `ruff format --check` clean; docstrings with units; `pytest -q` green.
+- [x] Given the London worked example, then 2024-01-15 has `tmax_c = 11.0`, `tmin_c = 2.0`; 2024-01-14 has `tmax_c = 14.0`; 2024-01-16 has `tmin_c = −4.0`.
+- [x] Given offsets 6 / −6 (Paris), then Tmax(D) uses exactly the stamps D 07:00..D+1 06:00 and Tmin(D) exactly D−1 19:00..D 18:00 (a value just outside each window does not count; known answer in the test).
+- [x] Given offsets 0 / 0, then every existing spec 002 criterion still holds, including the hour-alignment example (2024-01-01 → 12.0 / −3.0).
+- [x] Given a registry entry with a window field missing, a bool or float, a value outside −23..23, or |tmax − tmin| > 24, then an error names the entry and the field.
+- [x] Given London 1991-01-01..1991-12-31 with year files 1991 and 1992 present, then Tmin(1991-01-01) reads 1990-12-31 10:00..23:00 from the edge-day file `era5_london_19901231.nc` and Tmax(1991-12-31) reads 1992-01-01 00:00..09:00 from the 1992 year file; no hour is read twice.
+- [x] Given a missing hourly step anywhere in the needed span (including edge-day hours), then an error names the missing timestamp.
+- [x] Given `download` for London 1991..2024 with every year file present, then exactly two temperature requests are sent: 1990-12-31 and 2025-01-01, each one day with all 24 times and otherwise the same keys as a year request; given a 0 / 0 station, no previous-day request is sent; no day is requested when its year file exists; no `…0101T00` file is requested.
+- [x] Given an edge-day response missing an hour, then a `DownloadError` names the day and no file is left.
+- [x] Given a processed file, then its metadata has `tmax_window_start_utc_h` and `tmin_window_start_utc_h` equal to the registry; `publish` rejects a file with either missing or not an integer in −23..23; the diagnostics use the same windows (known answer in the test).
+- [x] `stations.toml` London has `tmax_window_start_utc_h = 9`, `tmin_window_start_utc_h = -15`.
+- [x] Given touching windows (|tmax − tmin| = 24, e.g. London) and a day whose Tmin exceeds its Tmax (the 1991-11-08 shape: mn2t stamped D 09:00 = 11.302, mx2t stamped D 10:00 = 11.273, falling all day), then that day's `tmin_c` and `tmax_c` are both the midpoint (11.2875), HDD equals the unadjusted `max(0, 18 − (Tmax + Tmin)/2)`, and metadata `tmin_tmax_adjusted_days` counts such days ("0" when none).
+- [x] Given overlapping windows (|tmax − tmin| < 24, e.g. 0 / 0 or 6 / −6) and a day with Tmin > Tmax, then it is still an error naming the date (it cannot happen with consistent data).
+- [x] **Manual:** London reprocessed with the new windows over the years already downloaded; monthly HDD (base 18 °C) old vs new reported in the PR and the development log; the Java contract check rerun on the new file.
+- [x] `ruff check`, `ruff format --check` clean; docstrings with units; `pytest -q` green.
 
 ### Decisions (approved 2026-11-18)
 1. **08:50 → 09:00.** ERA5 extremes are per whole hour, so a window can only start on the
