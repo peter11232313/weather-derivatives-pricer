@@ -124,3 +124,37 @@ def test_processed_file_without_adjustments_records_zero(raw_dir, processed_dir,
     write_year_file(raw_dir, "london", 1991, era5(times, values(times, 12.0), values(times, 4.0)))
     _, _, _, kv = read(run(raw_dir, processed_dir, london_9_15, DAY, DAY))
     assert kv["tmin_tmax_adjusted_days"] == "0"
+
+
+# Owner OK 2026-11-19 (quant re-review): a guard so a corrupt file cannot be flattened.
+@pytest.mark.parametrize("gap_c", [0.5, 0.07])
+def test_touching_windows_gap_up_to_half_a_degree_gets_the_midpoint(gap_c):
+    times = hours(FIRST, LAST)
+    mx = cooling_values(times, 12.5, 10.5, {"1991-11-08T10:00": 11.0})
+    mn = cooling_values(times, 12.0, 10.0, {"1991-11-08T09:00": 11.0 + gap_c})
+    daily = daily_extremes(
+        series_c(mx, times),
+        series_c(mn, times),
+        DAY,
+        DAY,
+        tmax_window_start_utc_h=9,
+        tmin_window_start_utc_h=-15,
+    )
+    assert daily.tmax_c[0] == pytest.approx(11.0 + gap_c / 2, abs=1e-12)
+    assert daily.tmin_tmax_adjusted_days == 1
+
+
+@pytest.mark.parametrize("gap_c", [0.51, 5.0])
+def test_touching_windows_gap_above_half_a_degree_is_an_error_naming_the_date(gap_c):
+    times = hours(FIRST, LAST)
+    mx = cooling_values(times, 12.5, 10.5, {"1991-11-08T10:00": 11.0})
+    mn = cooling_values(times, 12.0, 10.0, {"1991-11-08T09:00": 11.0 + gap_c})
+    with pytest.raises(DataError, match="1991-11-08"):
+        daily_extremes(
+            series_c(mx, times),
+            series_c(mn, times),
+            DAY,
+            DAY,
+            tmax_window_start_utc_h=9,
+            tmin_window_start_utc_h=-15,
+        )

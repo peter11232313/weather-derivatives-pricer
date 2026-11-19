@@ -35,6 +35,7 @@ Contracts settle on each station's own observation windows, all in UTC:
   through 09:00; ERA5's 08–09 minimum and 09–10 maximum do not share the 09:00 instant)
   gets both set to their midpoint; the count is in metadata `tmin_tmax_adjusted_days`.
   HDD and CDD are unchanged (an index on Tmax or Tmin alone would see it). Overlapping windows keep Tmin > Tmax as an error.
+  An excess above 0.5 °C is still an error (corrupt data guard).
 
 ## Consequences
 - London and Paris daily values change; processed files must be regenerated (no new

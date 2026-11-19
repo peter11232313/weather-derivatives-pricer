@@ -321,6 +321,8 @@ DST windows; ERA5-vs-station bias.
    count is recorded in metadata `tmin_tmax_adjusted_days` (informational; not required
    by `publish`). With overlapping windows Tmin > Tmax stays an error. Rejected: allowing
    Tmin > Tmax (needs a Java pricer change) or a fixed tolerance (arbitrary).
+   **Guard (owner OK 2026-11-19, quant re-review):** an excess above 0.5 °C is still an error
+   naming the date (real gaps ≤ 0.07 °C; a larger one means corrupt or swapped data).
 
 ### Open questions
 None.

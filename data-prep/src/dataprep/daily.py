@@ -16,6 +16,9 @@ import xarray as xr
 from dataprep.errors import DataError
 
 HOURS_PER_DAY = 24
+# Touching windows: Tmin may exceed Tmax by at most this much (degC) before the midpoint
+# is used; real London gaps are <= 0.07, so a larger one means corrupt data (decision 6).
+MAX_TMIN_ABOVE_TMAX_C = 0.5
 
 
 @dataclass(frozen=True)
@@ -80,8 +83,9 @@ def daily_extremes(
         DataError: If an hourly step inside a needed window is missing (the message names
             the timestamp), a needed value is NaN (the message names the timestamp and the
             day whose Tmax or Tmin uses it), or a day has tmin > tmax under overlapping
-            windows (names the date). Under touching windows (24 h apart) such a day's
-            Tmax and Tmin are both set to their midpoint and counted instead.
+            windows, or by more than ``MAX_TMIN_ABOVE_TMAX_C`` under touching windows
+            (names the date). Under touching windows (24 h apart) a smaller excess sets
+            the day's Tmax and Tmin both to their midpoint, counted instead.
     """
     if start > end:
         raise DataError(f"start {start} is after end {end}")
@@ -94,6 +98,13 @@ def daily_extremes(
     if bad.size and not touching:
         k = bad[0]
         raise DataError(f"tmin_c {tmin_c[k]} > tmax_c {tmax_c[k]} on {dates[k]}")
+    too_far = bad[tmin_c[bad] - tmax_c[bad] > MAX_TMIN_ABOVE_TMAX_C]
+    if too_far.size:
+        k = too_far[0]
+        raise DataError(
+            f"tmin_c {tmin_c[k]} > tmax_c {tmax_c[k]} on {dates[k]} by more than "
+            f"{MAX_TMIN_ABOVE_TMAX_C} degC; not a window-boundary artefact (corrupt data?)"
+        )
     if bad.size:
         # Decision 6: the windows meet at one instant that ERA5's hourly extremes on either
         # side do not share; the midpoint approximates the temperature at that instant.

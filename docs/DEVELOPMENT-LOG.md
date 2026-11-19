@@ -154,6 +154,7 @@ Contents
 | 5d.10 | Size of the change. | London monthly HDD (Feb 1991..Nov 1994) new − old: mean −3.94, sd 2.79, −9.21..+4.25; Nov–Mar mean −2.59, lower in 14 of 18. A systematic time-of-observation bias, not noise: a 00–24 Tmin window catches two nights. Burn and detrended burn must be rerun on the new file. |
 | 5d.11 | Code review: a one-day range with offsets 23/23 returned the same edge day twice; README still described the UTC day; `publish` accepted `"09"`/`"-0"`. | Edge days de-duplicated; publish requires canonical integers; README, CHANGELOG, PROGRESS updated; tests added. |
 | 5d.12 | Manual Java check on the new file. | Java loader reads it (1,459 rows); tmin == tmax on the 3 midpoint days; Jan 1994 HDD 395.197 matches Python. |
+| 5d.13 | Quant re-review: the midpoint accepted any size of Tmin > Tmax, so a corrupt or swapped file would be silently flattened. | Owner OK: guard at 0.5 °C (real gaps ≤ 0.07); a larger excess is an error naming the date. Wording: HDD and CDD unchanged; republish paths named. |
 
 ## 6. Workflow lessons
 

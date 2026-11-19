@@ -62,7 +62,8 @@ D−1 09:00..D 09:00 (08:50 rounded to 09:00). 0 / 0 is the UTC day (KNMI, DWD).
 - With touching windows (London) a day that cools steadily through 09:00 can come out
   with Tmin a few hundredths of a degree above Tmax (ERA5's 08–09 minimum and 09–10
   maximum do not share 09:00); both are set to their midpoint (HDD and CDD unchanged) and the
-  count is in metadata `tmin_tmax_adjusted_days`.
+  count is in metadata `tmin_tmax_adjusted_days`. An excess above 0.5 °C is still an
+  error (corrupt-data guard).
 - Compared with the old 00–00 day, London monthly HDD is about 4 HDD lower on average
   (1991–1994: mean −3.9, sd 2.8, worst −9.2): a 00–24 Tmin window catches parts of two
   nights. Files built before amendment B lack the window metadata, fail `publish`, and must
