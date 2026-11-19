@@ -189,7 +189,8 @@ def _daily_mean_c(
 ) -> float:
     """Period mean of daily (tmax + tmin) / 2 for a diagnostic series (degrees C).
 
-    Uses the station's observation windows (``windows``: the two ``*_window_start_utc_h``).
+    Uses the station's observation windows (``windows``: the two ``*_window_start_utc_h``);
+    the diagnostics' own midpoint-adjusted day count is not recorded.
     """
     daily: DailySeries = daily_extremes(mx2t, mn2t, start, end, **windows)
     return float(np.mean((daily.tmax_c + daily.tmin_c) / 2))

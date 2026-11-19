@@ -317,7 +317,7 @@ DST windows; ERA5-vs-station bias.
    for 08–09 and 09–10 do not share the 09:00 instant, so on a day that cools steadily
    through 09:00 Tmin can exceed Tmax by a few hundredths of a degree (3 of 1,459 days in
    1991–1994, ≤ 0.07 °C). Both are then set to their midpoint, about T(09:00), which a
-   station thermometer would record for both; HDD is unchanged (it uses the sum). The
+   station thermometer would record for both; HDD and CDD are unchanged (they use the sum; an index on Tmax or Tmin alone would see it). The
    count is recorded in metadata `tmin_tmax_adjusted_days` (informational; not required
    by `publish`). With overlapping windows Tmin > Tmax stays an error. Rejected: allowing
    Tmin > Tmax (needs a Java pricer change) or a fixed tolerance (arbitrary).
