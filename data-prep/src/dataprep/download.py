@@ -275,8 +275,8 @@ def download_range(
     Args:
         client: The CDS client.
         station: The settlement station.
-        start: First UTC day.
-        end: Last UTC day (inclusive).
+        start: First settlement day.
+        end: Last settlement day (inclusive).
         raw_dir: Folder for raw files.
         years_per_request: Years per Copernicus request, 1..``MAX_YEARS_PER_REQUEST``.
 
@@ -301,7 +301,11 @@ def download_range(
     first, last = needed_span(
         station.tmax_window_start_utc_h, station.tmin_window_start_utc_h, start, end
     )
-    edge_days = [d for d in (first.date(), last.date()) if not start <= d <= end]
+    # Offsets are within -23..23, so an edge day is the day before start or after end
+    # (both ends can fall on the same day for a one-day range); each is fetched once.
+    edge_days = sorted(
+        {first.date(), last.date()} - {d for d in (first.date(), last.date()) if start <= d <= end}
+    )
     for day in edge_days:
         own_year = year_file(raw_dir, station.city, day.year)
         if own_year.exists():

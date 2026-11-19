@@ -80,7 +80,8 @@ def validate(path: Path, *, name: Path | None = None) -> None:
         )
     for key in (TMAX_WINDOW_FIELD, TMIN_WINDOW_FIELD):
         value = kv[key]
-        if not _WINDOW_HOURS.fullmatch(value) or abs(int(value)) > MAX_WINDOW_START_H:
+        canonical = _WINDOW_HOURS.fullmatch(value) and str(int(value)) == value
+        if not canonical or abs(int(value)) > MAX_WINDOW_START_H:
             raise PublishError(
                 f"{label}: metadata {key} {value!r} is not a whole number of hours in "
                 f"-{MAX_WINDOW_START_H}..{MAX_WINDOW_START_H}"

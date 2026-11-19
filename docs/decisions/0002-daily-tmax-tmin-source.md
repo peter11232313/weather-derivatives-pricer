@@ -1,6 +1,6 @@
 # 0002 — Daily Tmax/Tmin from ERA5 `mx2t` / `mn2t`
 
-- Status: accepted
+- Status: accepted; hour alignment superseded by [ADR 0005](0005-per-station-observation-windows.md)
 - Date: 2026-11-16
 - Resolves: spec 001 open question 2
 

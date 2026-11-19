@@ -322,3 +322,28 @@ def test_b8_incomplete_edge_day_in_download_range_raises_and_keeps_year_files(ra
     assert not (raw_dir / "era5_london_20250101.nc").exists()
     assert all((raw_dir / f"era5_london_{y}.nc").is_file() for y in range(1991, 2025))
     assert not any(p.name.endswith(".tmp") or p.is_dir() for p in raw_dir.iterdir())
+
+
+def test_b7_one_day_range_with_both_ends_on_the_same_edge_day_fetches_it_once(raw_dir):
+    # Code review: offsets 23/23, start == end == 2020-12-31 -> the needed span is
+    # 2021-01-01 00:00..23:00, so both ends fall on the same edge day.
+    station = make_station(tmax_window_start_utc_h=23, tmin_window_start_utc_h=23)
+    present_years(raw_dir, [2020])
+    client = FakeCdsClient()
+    paths = download_range(client, station, date(2020, 12, 31), date(2020, 12, 31), raw_dir)
+    assert temperature_requests(client) == [edge_request(date(2021, 1, 1))]
+    assert paths.count(raw_dir / "era5_london_20210101.nc") == 1
+    assert len(paths) == len(set(paths))
+
+
+@pytest.mark.parametrize("value", ["09", "-09", "-0", "+9"])
+def test_publish_rejects_non_canonical_window_metadata(tmp_path, value):
+    from test_publish import FULL_METADATA, write_file
+
+    from dataprep.errors import PublishError
+    from dataprep.publish import validate
+
+    meta = dict(FULL_METADATA, tmax_window_start_utc_h=value)
+    path = write_file(tmp_path / "london.parquet", metadata=meta)
+    with pytest.raises(PublishError, match="tmax_window_start_utc_h"):
+        validate(path)
