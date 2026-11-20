@@ -155,6 +155,8 @@ Contents
 | 5d.11 | Code review: a one-day range with offsets 23/23 returned the same edge day twice; README still described the UTC day; `publish` accepted `"09"`/`"-0"`. | Edge days de-duplicated; publish requires canonical integers; README, CHANGELOG, PROGRESS updated; tests added. |
 | 5d.12 | Manual Java check on the new file. | Java loader reads it (1,459 rows); tmin == tmax on the 3 midpoint days; Jan 1994 HDD 395.197 matches Python. |
 | 5d.13 | Quant re-review: the midpoint accepted any size of Tmin > Tmax, so a corrupt or swapped file would be silently flattened. | Owner OK: guard at 0.5 °C (real gaps ≤ 0.07); a larger excess is an error naming the date. Wording: HDD and CDD unchanged; republish paths named. |
+| 5d.14 | Merge. | Merged via PR #9 (`4cd9fd0`); worktree and branch removed. The London build must be restarted (no download was running) to fetch 1995–2023 and the two edge days. |
+| 5d.15 | Personal subagents (`code-reviewer`, `planner`, `test-writer`) lived only in `~/.claude/agents/`. | Owner: **copy, not move**, into `.claude/agents/` (identical files, no private paths). Project copies take precedence inside the repo, so future edits go there. |
 
 ## 6. Workflow lessons
 
@@ -184,8 +186,8 @@ Contents
 
 ## 8. Still open
 
-- Spec 002 amendment B: after merge, rerun the London build (two edge-day requests) and
-  republish; then the real burn and detrended burn on 1991–2023.
+- Rerun the London build (1995–2023 plus two edge-day requests) and republish with the
+  09–09 windows; then the real burn and detrended burn on 1991–2023.
 - Paris, Amsterdam, Essen: add to `stations.toml` with confirmed coordinates (windows
   6/−6, 0/0, 0/0); for a long Essen history check the older DWD observation day.
 
@@ -195,4 +197,3 @@ Contents
 - Leap-day policy; optional daily-mean rounding target; look-ahead guard.
 - ERA5-vs-station bias analysis before real pricing.
 - Spec 001 range-check amendment.
-- Move the personal subagents (`code-reviewer`, `planner`, `test-writer`) into `.claude/agents/`.
