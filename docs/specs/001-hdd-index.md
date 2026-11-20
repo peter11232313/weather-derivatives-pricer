@@ -102,15 +102,15 @@ Out:
 - Per-station or seasonal plausibility checks; any Python change.
 
 ### Acceptance criteria
-- [ ] Given a file with `tmax_c = 60.0` and `tmin_c = −90.0`, when loaded, then it loads (limits inclusive).
-- [ ] Given `tmax_c = 60.000001` on 2024-01-02, when loaded, then a `TemperatureDataException` names `2024-01-02`, `tmax_c`, the value and the file path.
-- [ ] Given `tmin_c = −90.5`, when loaded, then the error names `tmin_c`.
-- [ ] Given a 3-day file still in kelvin (283.15 / 275.15), when loaded, then it is rejected (instead of a silent HDD of 0.0).
-- [ ] Given float32 columns, then the check applies after widening: `60.0f` loads, `60.5f` fails.
-- [ ] Given NaN or ±∞, then the existing "non-finite" error is raised, not a range error.
-- [ ] Given `tmax_c = 10.0` and a kelvin `tmin_c = 275.15`, then the range error naming `tmin_c` is reported, not `tminC > tmaxC` (range check runs first); a kelvin `tmax_c = 283.15` with `tmin_c = 5.0` gives the range error naming `tmax_c`.
-- [ ] Given one non-finite and one out-of-range value in the same row (e.g. +∞ / 500.0), then the non-finite error wins; values are range-checked only when both are finite, Tmax before Tmin.
-- [ ] All existing Java tests green; `load()` Javadoc lists the new failure; README, CHANGELOG, PROGRESS and the development log updated.
+- [x] Given a file with `tmax_c = 60.0` and `tmin_c = −90.0`, when loaded, then it loads (limits inclusive).
+- [x] Given `tmax_c = 60.000001` on 2024-01-02, when loaded, then a `TemperatureDataException` names `2024-01-02`, `tmax_c`, the value and the file path.
+- [x] Given `tmin_c = −90.5`, when loaded, then the error names `tmin_c`.
+- [x] Given a 3-day file still in kelvin (283.15 / 275.15), when loaded, then it is rejected (instead of a silent HDD of 0.0).
+- [x] Given float32 columns, then the check applies after widening: `60.0f` loads, `60.5f` fails.
+- [x] Given NaN or ±∞, then the existing "non-finite" error is raised, not a range error.
+- [x] Given `tmax_c = 10.0` and a kelvin `tmin_c = 275.15`, then the range error naming `tmin_c` is reported, not `tminC > tmaxC` (range check runs first); a kelvin `tmax_c = 283.15` with `tmin_c = 5.0` gives the range error naming `tmax_c`.
+- [x] Given one non-finite and one out-of-range value in the same row (e.g. +∞ / 500.0), then the non-finite error wins; values are range-checked only when both are finite, Tmax before Tmin.
+- [x] All existing Java tests green; `load()` Javadoc lists the new failure; README, CHANGELOG, PROGRESS and the development log updated.
 
 ### Decision
 Check in the loader only, not in `DailyTemp` (spec 002 decision 3; owner OK 2026-11-20).

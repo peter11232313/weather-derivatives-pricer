@@ -51,7 +51,11 @@ Contents
 | 2.7 | Open question: round the index to settlement precision? | Index engine stays at **full precision**; rounding is a per-contract term (became spec 003 / ADR 0004). |
 | 2.8 | Open question: daily Tmax/Tmin from hourly `t2m` or from `mx2t`/`mn2t`? | **`mx2t`/`mn2t`**; day D = values stamped D 01:00..D+1 00:00 — [ADR 0002](decisions/0002-daily-tmax-tmin-source.md). |
 | 2.9 | Open question: city value = nearest grid cell, 3×3 mean, or something else? | **Bilinear interpolation to the settlement station**, nearest land cell for coastal stations; nearest/3×3 kept as diagnostics — [ADR 0003](decisions/0003-city-value-at-settlement-station.md). The `era5-data` skill was updated to match. |
-| 2.10 | Physical range check (−90..60 °C): Python, Java or both? | **Java loader only**, as a separate spec 001 amendment (not done yet). |
+| 2.10 | Physical range check (−90..60 °C): Python, Java or both? | **Java loader only**, as spec 001 amendment A (done 2026-11-20, see 2.11–2.14). |
+| 2.11 | Planner: `v < MIN \|\| v > MAX` is true for ±∞, so infinities would get the range error instead of `DailyTemp`'s "non-finite" one. | Range-check only when both values are finite; a row with one non-finite and one out-of-range value gets the non-finite error (new criterion, owner OK). |
+| 2.12 | Planner: the criterion "range before `tmin > tmax`" used a kelvin Tmax with a normal Tmin, which never trips `tmin > tmax`, so it could not detect the order. | Criterion reworded to use a kelvin Tmin (10.0 / 275.15); the kelvin-Tmax case is kept (owner OK). |
+| 2.13 | Reviews (code, quant): no blockers. Some assertions were loose (kelvin test did not pin the column/row; "no `tmin_c` anywhere" could match the temp path). | Assertions added/tightened, limits also tested in the other column, float32 rounding of 60.000001 noted (owner OK). Javadoc states the check order. |
+| 2.14 | Quant: a winter-only °F file (London Nov–Mar mostly < 60 °F) or tenths of °C on cold days passes the range check and gives near-zero HDD. | Out of scope; recorded as an open question (whole-file plausibility or a units field in metadata). Our own pipeline always writes °C. |
 
 ## 3. Spec 002 — ERA5 → daily station temperatures
 
@@ -178,7 +182,7 @@ Contents
 | Bilinear to the station; nearest land cell; zero-weight cells ignored | [ADR 0003](decisions/0003-city-value-at-settlement-station.md) |
 | raw / processed / pricer folders with validating publish | spec 002 |
 | Zip downloads merged per GRIB step type (option A) | spec 002 (amended) |
-| Range check in Java only | spec 001 (amendment pending) |
+| Range check (−90..60 °C) in the Java loader only | spec 001 amendment A |
 | Manual Python→Java contract check | spec 002, README |
 | Daily-HDD half-up rounding in exact decimal | spec 003 (amended), [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md) |
 | Season label = first accrual year; no detrending yet | spec 003 |
@@ -196,4 +200,4 @@ Contents
   pending; it confirms the 3-year cap of spec 002 amendment A.
 - Leap-day policy; optional daily-mean rounding target; look-ahead guard.
 - ERA5-vs-station bias analysis before real pricing.
-- Spec 001 range-check amendment.
+- Units guard beyond the range check (winter-only °F files pass; see 2.14).
