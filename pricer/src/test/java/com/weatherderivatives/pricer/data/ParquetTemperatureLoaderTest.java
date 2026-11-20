@@ -326,6 +326,20 @@ class ParquetTemperatureLoaderTest {
   }
 
   @Test
+  void amendmentA_ac1_limitsInTheOtherColumn_load() {
+    // Each limit applies to both columns: Tmax at -90.0 and Tmin at 60.0 are also accepted.
+    LocalDate cold = LocalDate.of(2024, 1, 1);
+    LocalDate hot = LocalDate.of(2024, 1, 2);
+    ParquetFixtures.writeTemps(
+        cityFile("swapped"), List.of(new Row(cold, -90.0, -90.0), new Row(hot, 60.0, 60.0)));
+
+    DailyTemps temps = new ParquetTemperatureLoader(processedDir).load("swapped");
+
+    assertEquals(-90.0, temps.get(cold).tmaxC());
+    assertEquals(60.0, temps.get(hot).tminC());
+  }
+
+  @Test
   void amendmentA_ac2_tmaxJustAboveUpperLimit_exceptionNamesDateColumnValueAndFile() {
     ParquetFixtures.writeTemps(
         cityFile("seville"),
@@ -352,6 +366,8 @@ class ParquetTemperatureLoaderTest {
     assertMessageContains(ex, RANGE_ERROR);
     assertMessageContains(ex, "tmin_c");
     assertMessageContains(ex, "-90.5");
+    assertMessageContains(ex, "2024-01-01");
+    assertMessageContains(ex, cityFile("vostok").toString());
   }
 
   @Test
@@ -368,6 +384,8 @@ class ParquetTemperatureLoaderTest {
 
     assertMessageContains(ex, RANGE_ERROR);
     assertMessageContains(ex, "283.15"); // Tmax is checked first
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "2024-01-01"); // the first bad row is reported
   }
 
   @Test
@@ -398,6 +416,8 @@ class ParquetTemperatureLoaderTest {
     assertMessageContains(ex, RANGE_ERROR);
     assertMessageContains(ex, "tmax_c");
     assertMessageContains(ex, "60.5"); // 60.5f is exact in binary, widens to 60.5
+    // Note: 60.000001 stored as float32 rounds to exactly 60.0f and therefore loads; the check
+    // applies to the widened stored value, not to what the writer intended.
   }
 
   @ParameterizedTest(name = "{0}={1}")
@@ -483,6 +503,9 @@ class ParquetTemperatureLoaderTest {
     assertMessageContains(ex, RANGE_ERROR);
     assertMessageContains(ex, "tmax_c");
     assertMessageContains(ex, "70.0");
-    assertMessageLacks(ex, "tmin_c");
+    // starts-with rather than "no tmin_c anywhere": the temp-dir path could contain that text.
+    assertTrue(
+        ex.getMessage().startsWith("tmax_c="),
+        () -> "expected the Tmax error first but was: " + ex.getMessage());
   }
 }

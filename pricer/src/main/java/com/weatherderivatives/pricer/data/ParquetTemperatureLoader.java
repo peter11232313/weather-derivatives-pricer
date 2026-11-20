@@ -26,8 +26,13 @@ import java.util.regex.Pattern;
  * <p>Required columns: {@code date} (Parquet DATE), {@code tmax_c} and {@code tmin_c} (float64, °C;
  * float32 is accepted and widened exactly). Extra columns are ignored. Every row is validated at
  * load, so one bad day fails the whole file. Finite values outside {@value #MIN_TEMP_C}..{@value
- * #MAX_TEMP_C} °C (inclusive) are rejected, which catches corrupt or wrong-unit files such as
- * kelvin. Non-finite values are left to {@link DailyTemp}, which reports them as non-finite.
+ * #MAX_TEMP_C} °C (inclusive) are rejected. This catches corrupt files and kelvin or doubly
+ * converted values, but it is not a general units check: a winter-only Fahrenheit file can stay
+ * inside the limits.
+ *
+ * <p>When a row breaks several rules, the first in this order is reported: a non-finite value (left
+ * to {@link DailyTemp}), then {@code tmax_c} out of range, then {@code tmin_c} out of range, then
+ * {@code tminC > tmaxC}.
  */
 public final class ParquetTemperatureLoader {
 
@@ -64,8 +69,8 @@ public final class ParquetTemperatureLoader {
    * @throws TemperatureDataException if the file is missing (names the path), a required column is
    *     missing or has the wrong type (names the column), a cell is null (names the date and
    *     column), a finite value lies outside {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names
-   *     the date, column, value and file), a date repeats or a row's values are invalid (names the
-   *     date)
+   *     the date, column, value and file; checked before {@code tminC > tmaxC}), a date repeats or
+   *     a row's values are invalid (names the date)
    */
   public DailyTemps load(String city) {
     if (city == null || !CITY_NAME.matcher(city).matches()) {
