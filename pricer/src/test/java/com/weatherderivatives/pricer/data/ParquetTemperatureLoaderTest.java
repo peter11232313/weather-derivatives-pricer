@@ -1,6 +1,7 @@
 package com.weatherderivatives.pricer.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
@@ -167,6 +169,7 @@ class ParquetTemperatureLoaderTest {
     TemperatureDataException ex =
         assertThrows(TemperatureDataException.class, () -> loader.load("prague"));
     assertMessageContains(ex, "2024-01-02");
+    assertMessageContains(ex, "non-finite");
   }
 
   @Test
@@ -180,6 +183,7 @@ class ParquetTemperatureLoaderTest {
     TemperatureDataException ex =
         assertThrows(TemperatureDataException.class, () -> loader.load("warsaw"));
     assertMessageContains(ex, "2024-01-02");
+    assertMessageContains(ex, "non-finite");
   }
 
   @Test
@@ -288,5 +292,220 @@ class ParquetTemperatureLoaderTest {
   @Test
   void nullProcessedDir_throwsNullPointerException() {
     assertThrows(NullPointerException.class, () -> new ParquetTemperatureLoader(null));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Spec 001 Amendment A: physical range check, -90.0..60.0 degC inclusive, in the loader only.
+  // ---------------------------------------------------------------------------------------------
+
+  private static final String RANGE_ERROR = "outside physical range";
+
+  private static void assertMessageLacks(Throwable ex, String unexpected) {
+    String msg = ex.getMessage();
+    assertFalse(
+        msg != null && msg.contains(unexpected),
+        () -> "expected message NOT to contain '" + unexpected + "' but was: " + msg);
+  }
+
+  private TemperatureDataException loadExpectingFailure(String city) {
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    return assertThrows(TemperatureDataException.class, () -> loader.load(city));
+  }
+
+  @Test
+  void amendmentA_ac1_valuesExactlyAtLimits_load() {
+    // Limits are inclusive: tmax 60.0 and tmin -90.0 are both accepted, values unchanged.
+    LocalDate d = LocalDate.of(2024, 1, 1);
+    ParquetFixtures.writeTemps(cityFile("limits"), List.of(new Row(d, 60.0, -90.0)));
+
+    DailyTemps temps = new ParquetTemperatureLoader(processedDir).load("limits");
+
+    assertEquals(1, temps.size());
+    assertEquals(60.0, temps.get(d).tmaxC());
+    assertEquals(-90.0, temps.get(d).tminC());
+  }
+
+  @Test
+  void amendmentA_ac1_limitsInTheOtherColumn_load() {
+    // Each limit applies to both columns: Tmax at -90.0 and Tmin at 60.0 are also accepted.
+    LocalDate cold = LocalDate.of(2024, 1, 1);
+    LocalDate hot = LocalDate.of(2024, 1, 2);
+    ParquetFixtures.writeTemps(
+        cityFile("swapped"), List.of(new Row(cold, -90.0, -90.0), new Row(hot, 60.0, 60.0)));
+
+    DailyTemps temps = new ParquetTemperatureLoader(processedDir).load("swapped");
+
+    assertEquals(-90.0, temps.get(cold).tmaxC());
+    assertEquals(60.0, temps.get(hot).tminC());
+  }
+
+  @Test
+  void amendmentA_ac2_tmaxJustAboveUpperLimit_exceptionNamesDateColumnValueAndFile() {
+    ParquetFixtures.writeTemps(
+        cityFile("seville"),
+        List.of(
+            new Row(LocalDate.of(2024, 1, 1), 10.0, 2.0),
+            new Row(LocalDate.of(2024, 1, 2), 60.000001, 2.0)));
+
+    TemperatureDataException ex = loadExpectingFailure("seville");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "2024-01-02");
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "60.000001"); // Double.toString(60.000001)
+    assertMessageContains(ex, cityFile("seville").toString());
+  }
+
+  @Test
+  void amendmentA_ac3_tminBelowLowerLimit_exceptionNamesTminColumn() {
+    ParquetFixtures.writeTemps(
+        cityFile("vostok"), List.of(new Row(LocalDate.of(2024, 1, 1), 5.0, -90.5)));
+
+    TemperatureDataException ex = loadExpectingFailure("vostok");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "tmin_c");
+    assertMessageContains(ex, "-90.5");
+    assertMessageContains(ex, "2024-01-01");
+    assertMessageContains(ex, cityFile("vostok").toString());
+  }
+
+  @Test
+  void amendmentA_ac4_threeDayFileStillInKelvin_isRejected() {
+    // Without the check: mean 279.15, daily HDD max(0, 18 - 279.15) = 0, a silent index of 0.0.
+    ParquetFixtures.writeTemps(
+        cityFile("kelvin"),
+        List.of(
+            new Row(LocalDate.of(2024, 1, 1), 283.15, 275.15),
+            new Row(LocalDate.of(2024, 1, 2), 283.15, 275.15),
+            new Row(LocalDate.of(2024, 1, 3), 283.15, 275.15)));
+
+    TemperatureDataException ex = loadExpectingFailure("kelvin");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "283.15"); // Tmax is checked first
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "2024-01-01"); // the first bad row is reported
+  }
+
+  @Test
+  void amendmentA_ac5_float32AtUpperLimit_loadsAfterWidening() {
+    ParquetFixtures.writeQuery(
+        cityFile("f32ok"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(60.0 AS FLOAT) AS tmax_c,"
+            + " CAST(0.0 AS FLOAT) AS tmin_c");
+    assertEquals("FLOAT", ParquetFixtures.schemaOf(cityFile("f32ok")).get("tmax_c"));
+
+    DailyTemp day =
+        new ParquetTemperatureLoader(processedDir).load("f32ok").get(LocalDate.of(2024, 1, 1));
+
+    assertEquals(60.0, day.tmaxC()); // 60.0f widens exactly to 60.0
+    assertEquals(0.0, day.tminC());
+  }
+
+  @Test
+  void amendmentA_ac5_float32AboveUpperLimit_failsNamingTmaxColumnAndValue() {
+    ParquetFixtures.writeQuery(
+        cityFile("f32bad"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(60.5 AS FLOAT) AS tmax_c,"
+            + " CAST(0.0 AS FLOAT) AS tmin_c");
+    assertEquals("FLOAT", ParquetFixtures.schemaOf(cityFile("f32bad")).get("tmax_c"));
+
+    TemperatureDataException ex = loadExpectingFailure("f32bad");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "60.5"); // 60.5f is exact in binary, widens to 60.5
+    // Note: 60.000001 stored as float32 rounds to exactly 60.0f and therefore loads; the check
+    // applies to the widened stored value, not to what the writer intended.
+  }
+
+  @ParameterizedTest(name = "{0}={1}")
+  @CsvSource({
+    "tmax_c, NaN",
+    "tmax_c, Infinity",
+    "tmax_c, -Infinity",
+    "tmin_c, NaN",
+    "tmin_c, Infinity",
+    "tmin_c, -Infinity"
+  })
+  void amendmentA_ac6_nonFiniteValue_raisesNonFiniteErrorNotRangeError(
+      String column, double value) {
+    // The other value is a normal, in-range temperature.
+    Row row =
+        column.equals("tmax_c")
+            ? new Row(LocalDate.of(2024, 1, 2), value, 2.0)
+            : new Row(LocalDate.of(2024, 1, 2), 10.0, value);
+    ParquetFixtures.writeTemps(cityFile("nonfinite"), List.of(row));
+
+    TemperatureDataException ex = loadExpectingFailure("nonfinite");
+
+    assertMessageContains(ex, "non-finite");
+    assertMessageLacks(ex, RANGE_ERROR);
+  }
+
+  @Test
+  void amendmentA_ac7_kelvinTminWithCelsiusTmax_reportsRangeErrorNotOrderError() {
+    // 275.15 > 10.0 would also trip tminC > tmaxC; the range check must run first.
+    ParquetFixtures.writeTemps(
+        cityFile("ordera"), List.of(new Row(LocalDate.of(2024, 1, 1), 10.0, 275.15)));
+
+    TemperatureDataException ex = loadExpectingFailure("ordera");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "tmin_c");
+    assertMessageContains(ex, "275.15");
+    assertMessageLacks(ex, "tminC > tmaxC");
+  }
+
+  @Test
+  void amendmentA_ac7_kelvinTmaxWithCelsiusTmin_reportsRangeErrorNamingTmax() {
+    ParquetFixtures.writeTemps(
+        cityFile("orderb"), List.of(new Row(LocalDate.of(2024, 1, 1), 283.15, 5.0)));
+
+    TemperatureDataException ex = loadExpectingFailure("orderb");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "283.15");
+  }
+
+  @Test
+  void amendmentA_ac8_infiniteTmaxWithOutOfRangeTmin_nonFiniteErrorWins() {
+    ParquetFixtures.writeTemps(
+        cityFile("mixeda"),
+        List.of(new Row(LocalDate.of(2024, 1, 1), Double.POSITIVE_INFINITY, 500.0)));
+
+    TemperatureDataException ex = loadExpectingFailure("mixeda");
+
+    assertMessageContains(ex, "non-finite");
+    assertMessageLacks(ex, RANGE_ERROR);
+  }
+
+  @Test
+  void amendmentA_ac8_outOfRangeTmaxWithNanTmin_nonFiniteErrorWins() {
+    ParquetFixtures.writeTemps(
+        cityFile("mixedb"), List.of(new Row(LocalDate.of(2024, 1, 1), 500.0, Double.NaN)));
+
+    TemperatureDataException ex = loadExpectingFailure("mixedb");
+
+    assertMessageContains(ex, "non-finite");
+    assertMessageLacks(ex, RANGE_ERROR);
+  }
+
+  @Test
+  void amendmentA_ac8_bothOutOfRange_tmaxIsCheckedFirst() {
+    ParquetFixtures.writeTemps(
+        cityFile("bothbad"), List.of(new Row(LocalDate.of(2024, 1, 1), 70.0, -95.0)));
+
+    TemperatureDataException ex = loadExpectingFailure("bothbad");
+
+    assertMessageContains(ex, RANGE_ERROR);
+    assertMessageContains(ex, "tmax_c");
+    assertMessageContains(ex, "70.0");
+    // starts-with rather than "no tmin_c anywhere": the temp-dir path could contain that text.
+    assertTrue(
+        ex.getMessage().startsWith("tmax_c="),
+        () -> "expected the Tmax error first but was: " + ex.getMessage());
   }
 }

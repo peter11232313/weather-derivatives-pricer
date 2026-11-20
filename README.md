@@ -138,8 +138,10 @@ double hddDegC = HddIndex.cumulativeHddDegC(
 
 Input file: one row per settlement day with `date` (Parquet DATE), `tmax_c` and `tmin_c`
 (float64; float32 accepted), Snappy, gzip or uncompressed. Missing days, duplicate
-dates, nulls, non-finite values and `tmin_c > tmax_c` are rejected with an error naming
-the date, column or path; nothing is skipped or interpolated.
+dates, nulls, non-finite values, values outside −90..60 °C (e.g. a file left in kelvin)
+and `tmin_c > tmax_c` are rejected with an error naming the date, column or path; nothing
+is skipped or interpolated. The range check is a guard against corrupt or wrong-unit
+files, not a units check: a winter-only file in °F can stay inside the limits.
 
 ## Burn analysis (spec 003)
 An `HddContract` (call, put or swap; whole calendar months; strike, tick in £ per °C·day,

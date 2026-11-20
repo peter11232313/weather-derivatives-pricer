@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- pricer (spec 001 amendment A): `ParquetTemperatureLoader` rejects finite `tmax_c` /
+  `tmin_c` outside −90..60 °C (inclusive), naming the date, column, value and file. A file
+  left in kelvin used to load and give a silent HDD index of 0. Non-finite values keep
+  their own error; the range check runs before the `tmin_c > tmax_c` check.
 - data-prep (spec 002 amendment B, ADR 0005): daily Tmax/Tmin follow each station's
   observation windows, two required whole-hour UTC offsets in `stations.toml` (London
   9 / −15, i.e. 09–09 UTC; was the UTC day 00–00 for every station). Processed files

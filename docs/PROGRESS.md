@@ -5,6 +5,9 @@ _Last updated: 2026-11-20_
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
   - `HddIndex`, `DailyTemp`/`DailyTemps`, `ParquetTemperatureLoader` (Hardwood); 69 tests; 17/17 criteria ticked.
+- **Spec 001 amendment A — physical range check**: branch `feat/001a-range-check` (stacked on `chore/repo-subagents`), ready for PR.
+  - Loader rejects finite `tmax_c`/`tmin_c` outside −90..60 °C inclusive; order: non-finite, Tmax range, Tmin range, `tmin > tmax`.
+  - 213 Java tests green; spotless + javadoc clean; 9/9 criteria ticked. Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; test assertions tightened (owner OK).
 - **Spec 001 open questions resolved** (PR #2): full-precision index; [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) `mx2t`/`mn2t`; [ADR 0003](decisions/0003-city-value-at-settlement-station.md) station interpolation; `era5-data` skill aligned.
 - **Spec 002 — ERA5 → daily station temperatures (data-prep)**: merged to `main` via [PR #3](https://github.com/peter11232313/weather-derivatives-pricer/pull/3) (`8d4806a`); CI green (252 tests on Linux).
   - `python -m dataprep {download,process,publish,build}`; package in `data-prep/src/dataprep/`; London Heathrow in `data-prep/stations.toml`.
@@ -35,10 +38,12 @@ _Last updated: 2026-11-20_
 1. **Finish the 1991–2024 download** (multi-year requests, running in the user's terminal; one command at a time; keep the PC awake). `python -m dataprep build --city london --start 1991-01-01 --end 2024-12-31` again fetches the two edge days (1990-12-31, 2025-01-01) and reprocesses with the 09–09 windows → expect 12,419 rows; republish (the old file lacks window metadata).
 2. Real burn on 1991–2023 London seasons once the data is published.
 3. Real detrended burn on London once 1991–2023 is published (needs ≥ 10 seasons).
-4. Spec 001 amendment: physical range check (−90..60 °C) in the Java loader (decided: Java only).
-5. Later: CDD index, collars/strips, index-distribution and OU models, REST endpoint.
+4. Later: CDD index, collars/strips, index-distribution and OU models, REST endpoint.
 
 ## Open questions
+**Data guards**
+- A winter-only file in °F (or tenths of °C on cold days) passes the −90..60 °C check and gives a near-zero HDD. Our pipeline always writes °C; a whole-file plausibility check or a units field in the metadata (checked by Java) would close it (quant review of spec 001 amendment A).
+
 **Pricing conventions (from quant review, deferred)**
 - Some term sheets round the daily mean temperature rather than daily HDD; add a `RoundingTarget` option when a contract needs it (ADR 0004).
 - Leap-day policy for historical seasons (keep 29 Feb vs drop / match target day count).

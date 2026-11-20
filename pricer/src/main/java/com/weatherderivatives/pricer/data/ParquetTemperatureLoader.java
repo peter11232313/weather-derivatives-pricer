@@ -25,13 +25,26 @@ import java.util.regex.Pattern;
  *
  * <p>Required columns: {@code date} (Parquet DATE), {@code tmax_c} and {@code tmin_c} (float64, °C;
  * float32 is accepted and widened exactly). Extra columns are ignored. Every row is validated at
- * load, so one bad day fails the whole file.
+ * load, so one bad day fails the whole file. Finite values outside {@value #MIN_TEMP_C}..{@value
+ * #MAX_TEMP_C} °C (inclusive) are rejected. This catches corrupt files and kelvin or doubly
+ * converted values, but it is not a general units check: a winter-only Fahrenheit file can stay
+ * inside the limits.
+ *
+ * <p>When a row breaks several rules, the first in this order is reported: a non-finite value (left
+ * to {@link DailyTemp}), then {@code tmax_c} out of range, then {@code tmin_c} out of range, then
+ * {@code tminC > tmaxC}.
  */
 public final class ParquetTemperatureLoader {
 
   static final String DATE_COLUMN = "date";
   static final String TMAX_COLUMN = "tmax_c";
   static final String TMIN_COLUMN = "tmin_c";
+
+  /** Lowest physically plausible daily temperature, °C (world record −89.2 °C). */
+  static final double MIN_TEMP_C = -90.0;
+
+  /** Highest physically plausible daily temperature, °C (world record 56.7 °C). */
+  static final double MAX_TEMP_C = 60.0;
 
   private static final Pattern CITY_NAME = Pattern.compile("[a-z0-9_-]+");
 
@@ -55,7 +68,9 @@ public final class ParquetTemperatureLoader {
    * @throws IllegalArgumentException if {@code city} does not match {@code [a-z0-9_-]+}
    * @throws TemperatureDataException if the file is missing (names the path), a required column is
    *     missing or has the wrong type (names the column), a cell is null (names the date and
-   *     column), a date repeats or a row's values are invalid (names the date)
+   *     column), a finite value lies outside {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names
+   *     the date, column, value and file; checked before {@code tminC > tmaxC}), a date repeats or
+   *     a row's values are invalid (names the date)
    */
   public DailyTemps load(String city) {
     if (city == null || !CITY_NAME.matcher(city).matches()) {
@@ -94,6 +109,11 @@ public final class ParquetTemperatureLoader {
         LocalDate date = rows.getDate(DATE_COLUMN);
         double tmaxC = readTempC(rows, TMAX_COLUMN, tmaxIsFloat, date, file);
         double tminC = readTempC(rows, TMIN_COLUMN, tminIsFloat, date, file);
+        // Non-finite values are reported by DailyTemp; range-check only when both are finite.
+        if (Double.isFinite(tmaxC) && Double.isFinite(tminC)) {
+          requireInRange(tmaxC, TMAX_COLUMN, date, file);
+          requireInRange(tminC, TMIN_COLUMN, date, file);
+        }
         days.add(new DailyTemp(date, tmaxC, tminC));
         rowIndex++;
       }
@@ -108,6 +128,24 @@ public final class ParquetTemperatureLoader {
       throw new TemperatureDataException("null " + column + " on " + date + " in " + file);
     }
     return isFloat ? rows.getFloat(column) : rows.getDouble(column);
+  }
+
+  /** Rejects a finite value outside the physical range, naming the date, column and file. */
+  private static void requireInRange(double tempC, String column, LocalDate date, Path file) {
+    if (tempC < MIN_TEMP_C || tempC > MAX_TEMP_C) {
+      throw new TemperatureDataException(
+          column
+              + "="
+              + tempC
+              + " outside physical range ["
+              + MIN_TEMP_C
+              + ", "
+              + MAX_TEMP_C
+              + "] °C on "
+              + date
+              + " in "
+              + file);
+    }
   }
 
   private static void requireDateColumn(FileSchema schema, Path file) {
