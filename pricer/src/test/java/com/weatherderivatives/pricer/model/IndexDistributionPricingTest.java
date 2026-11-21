@@ -228,7 +228,9 @@ class IndexDistributionPricingTest {
 
   @Test
   void ac5_cappedPrice_neverAboveCapNorUncapped_swapWithinPlusMinusCap() {
-    // includes K − L < 0 (e.g. put K=100, cap 5000 -> L = 250) and deep ITM (call K=0, put K=2000)
+    // includes K − L < 0 (e.g. put K=100, cap 5000 -> L = 250) and deep ITM (call K=0, put K=2000).
+    // Note: these bounds hold by construction (the implementation clamps capped prices), so this
+    // test guards the clamp; the capped formulas themselves are checked by the AC1 known answers.
     double[] strikes = {0, 100, 380, 400, 420, 700, 2000};
     double[] caps = {1, 100, 500, 5000, 1e6};
     for (double k : strikes) {
@@ -268,6 +270,18 @@ class IndexDistributionPricingTest {
         assertTrue(Double.isFinite(capped), type + " K=" + k + " -> " + capped);
         assertEquals(uncapped, capped, 1e-15 * Math.max(1.0, Math.abs(uncapped)), type + " K=" + k);
       }
+    }
+  }
+
+  @Test
+  void capFiniteButStrikePlusCapWidthOverflows_equalsUncapped() {
+    // K = 1e307, cap 1.7e308, tick 1: L = 1.7e308 is finite but K + L overflows to +inf; the
+    // price must equal the uncapped one, not NaN (quant review).
+    for (ContractType type : ContractType.values()) {
+      double uncapped = price(january(type, 1e307, 1.0, OptionalDouble.empty()), MU, SIGMA);
+      double capped = price(january(type, 1e307, 1.0, OptionalDouble.of(1.7e308)), MU, SIGMA);
+      assertTrue(Double.isFinite(capped), type + " -> " + capped);
+      assertEquals(uncapped, capped, 1e-15 * Math.max(1.0, Math.abs(uncapped)), type.toString());
     }
   }
 

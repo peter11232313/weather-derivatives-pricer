@@ -46,6 +46,17 @@ class NormalDistributionTest {
   }
 
   @Test
+  void cdf_farLeftTail_knownAnswers_relative1e12() {
+    // 50-digit references (series / continued fraction), not math.erfc.
+    // Φ(-6): |u| = 4.24, just inside Cody's third interval. 9.8658764503769814070...e-10
+    assertRelative(9.86587645037698e-10, NormalDistribution.cdf(-6.0), 1e-12);
+    // 2.7536241186062336950...e-89
+    assertRelative(2.7536241186062337e-89, NormalDistribution.cdf(-20.0), 1e-12);
+    // 4.9067139271481870595...e-198
+    assertRelative(4.906713927148187e-198, NormalDistribution.cdf(-30.0), 1e-12);
+  }
+
+  @Test
   void cdf_symmetry_phiXPlusPhiMinusXIsOne_within1e15_onGridMinus8To8() {
     for (int i = -800; i <= 800; i++) {
       double x = i * 0.01;
@@ -56,9 +67,13 @@ class NormalDistributionTest {
 
   @Test
   void cdf_monotoneNonDecreasing_acrossCodyBreakpoints() {
-    // Cody's erfc switches approximation at |z| = 0.5 and |z| = 4, i.e. x = ±0.5·√2 and ±4·√2.
+    // Cody's erfc switches approximation at |u| = 0.46875 and |u| = 4, i.e. x = ±0.46875·√2 and
+    // ±4·√2.
     double[] breakpoints = {
-      -4.0 * Math.sqrt(2.0), -0.5 * Math.sqrt(2.0), 0.5 * Math.sqrt(2.0), 4.0 * Math.sqrt(2.0)
+      -4.0 * Math.sqrt(2.0),
+      -0.46875 * Math.sqrt(2.0),
+      0.46875 * Math.sqrt(2.0),
+      4.0 * Math.sqrt(2.0)
     };
     for (double b : breakpoints) {
       double previous = NormalDistribution.cdf(b - 1e-4);
