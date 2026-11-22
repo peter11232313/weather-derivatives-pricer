@@ -24,10 +24,10 @@ import org.junit.jupiter.api.io.TempDir;
  * file is ever committed. Also self-tests the fixtures by reading them back with DuckDB, so loader
  * tests can only fail because of the loader.
  */
-class ParquetFixtures {
+public class ParquetFixtures {
 
   /** One fixture row in the spec 001 schema. */
-  record Row(LocalDate date, double tmaxC, double tminC) {}
+  public record Row(LocalDate date, double tmaxC, double tminC) {}
 
   private static Connection connect() throws SQLException {
     return DriverManager.getConnection("jdbc:duckdb:");
@@ -41,7 +41,7 @@ class ParquetFixtures {
    * Writes {@code rows} to {@code file} with columns {@code date DATE, tmax_c DOUBLE, tmin_c
    * DOUBLE}, in the given order. Doubles are bound as parameters so values round-trip bit-exactly.
    */
-  static Path writeTemps(Path file, List<Row> rows) {
+  public static Path writeTemps(Path file, List<Row> rows) {
     try (Connection conn = connect();
         Statement st = conn.createStatement()) {
       st.execute("CREATE TABLE t (seq INTEGER, date DATE, tmax_c DOUBLE, tmin_c DOUBLE)");
@@ -70,7 +70,7 @@ class ParquetFixtures {
    * Writes the result of an arbitrary DuckDB {@code SELECT} to {@code file}, for malformed-schema
    * fixtures. Cast every column explicitly in {@code selectSql}.
    */
-  static Path writeQuery(Path file, String selectSql) {
+  public static Path writeQuery(Path file, String selectSql) {
     return writeQuery(file, selectSql, "");
   }
 
@@ -78,7 +78,7 @@ class ParquetFixtures {
    * Like {@link #writeQuery(Path, String)} with extra DuckDB {@code COPY} options, e.g. {@code
    * "COMPRESSION zstd"}.
    */
-  static Path writeQuery(Path file, String selectSql, String copyOptions) {
+  public static Path writeQuery(Path file, String selectSql, String copyOptions) {
     String options = copyOptions.isEmpty() ? "" : ", " + copyOptions;
     try (Connection conn = connect();
         Statement st = conn.createStatement()) {

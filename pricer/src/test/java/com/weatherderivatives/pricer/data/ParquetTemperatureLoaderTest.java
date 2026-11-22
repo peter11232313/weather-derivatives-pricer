@@ -273,6 +273,28 @@ class ParquetTemperatureLoaderTest {
     assertMessageContains(ex, cityFile("atlantis").toString());
   }
 
+  // --- Spec 006 decision 4: a missing file is a CityFileNotFoundException (404 in the API) ---
+
+  @Test
+  void spec006_missingCityFile_throwsCityFileNotFoundExceptionNamingPath() {
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    // the subclass keeps existing TemperatureDataException callers working (checked by the type)
+    CityFileNotFoundException ex =
+        assertThrows(CityFileNotFoundException.class, () -> loader.load("paris"));
+    assertMessageContains(ex, cityFile("paris").toString());
+  }
+
+  @Test
+  void spec006_badDataInExistingFile_isNotCityFileNotFoundException() {
+    // only a missing file is "not found"; a present but invalid file stays a plain data error
+    ParquetFixtures.writeTemps(
+        cityFile("hot"), List.of(new Row(LocalDate.of(2024, 1, 1), 70.0, 2.0)));
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    TemperatureDataException ex =
+        assertThrows(TemperatureDataException.class, () -> loader.load("hot"));
+    assertFalse(ex instanceof CityFileNotFoundException, () -> "was: " + ex);
+  }
+
   // --- Loader input validation (Javadoc contract) ---
 
   @ParameterizedTest

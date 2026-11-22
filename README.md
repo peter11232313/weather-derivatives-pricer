@@ -13,6 +13,7 @@ Prices HDD/CDD weather derivatives on European cities using ERA5 temperatures.
 | [003](docs/specs/003-burn-analysis.md) | HDD contract payoffs + burn analysis | done |
 | [004](docs/specs/004-detrended-burn.md) | Detrended burn analysis | done |
 | [005](docs/specs/005-index-distribution.md) | Index-distribution pricing (normal) | done |
+| [006](docs/specs/006-rest-price-endpoint.md) | REST price endpoint | done |
 
 See [docs/PROGRESS.md](docs/PROGRESS.md) for what's next.
 
@@ -191,6 +192,45 @@ double priceGbp = IndexDistributionPricing.expectedPayoffGbp(call, 400.0, 50.0);
 
 The normal CDF is in-house (W. J. Cody's erfc), so there is no new dependency. The fitted
 σ is itself uncertain (about ±25% with 10 seasons), which the price does not include.
+
+## REST price endpoint (spec 006)
+A local HTTP server (Spring Boot) prices a contract with every method in one call. It binds to
+`127.0.0.1:8080` only.
+
+```bash
+cd pricer && ./gradlew bootRun          # reads data/pricer/<city>.parquet (from the repo root)
+# other folder: ./gradlew bootRun --args='--pricer.data-dir=/path/to/folder'
+
+curl -s http://127.0.0.1:8080/health    # {"status":"ok"}
+
+curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' -d '{
+  "city": "london", "type": "CALL", "firstMonth": "2001-01", "lastMonth": "2001-01",
+  "strikeHddDegC": 400, "tickGbpPerDegC": 20, "capGbp": null, "dailyHddDecimals": 1,
+  "firstSeasonYear": 1992, "lastSeasonYear": 2001, "targetSeasonYear": 2002 }'
+```
+
+- **Request:** `city`, `type` (`CALL` / `PUT` / `SWAP`), `firstMonth` / `lastMonth` (`YYYY-MM`,
+  a template; seasons re-anchor the years), `strikeHddDegC`, `tickGbpPerDegC`, `firstSeasonYear` /
+  `lastSeasonYear` are required. Optional: `capGbp`, `dailyHddDecimals`, `baseC` (default 18) and
+  `targetSeasonYear`. Unknown fields and wrong types (e.g. `"400"`, `1.5` decimals, `"type": 1`)
+  are rejected.
+- **Response:** each season's index and payoff, `burn` (price, standard error, payoff sd, min,
+  max, mean index) and `normal` (price, μ, σ). With `targetSeasonYear`, `detrended` adds the
+  slope and its standard error, the shifted seasons (with each season's mean temperature and
+  shift) and the detrended burn and normal prices; otherwise `"detrended": null`.
+- **At least 5 seasons** (the normal model's minimum), and **10 with `targetSeasonYear`**.
+- **Errors** are `{"error", "message"}`: 400 `invalid_request` (the message names the field),
+  404 `city_not_found`, 422 `data_error` (names the season and date), 404 / 405 / 406 / 415 for a
+  wrong route, method, `Accept` or content type, and 500 `internal_error` with no details.
+- The city file is read on every request, so a republished file is used without a restart.
+
+How to read the numbers:
+- Every `priceGbp` is an **undiscounted expected payoff with no risk loading**, not a quote.
+- `burn.stdErrorGbp` covers only the spread of past payoffs. The normal price does not include the
+  uncertainty of σ itself (about ±25% with 10 seasons).
+- The detrended standard errors leave out the uncertainty of the fitted slope; check
+  `slopeStdErrDegCPerYear`. For a back-test, choose a `targetSeasonYear` after `lastSeasonYear`
+  to avoid look-ahead.
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`
