@@ -70,7 +70,7 @@ Response (200):
 When `targetSeasonYear` is given, `detrended` holds:
 - `targetSeasonYear`;
 - `slopeDegCPerYear` and `slopeStdErrDegCPerYear`;
-- the shifted `seasons`;
+- the shifted `seasons`, each also with `seasonMeanTempC` and `shiftDegC`;
 - `burn` (same fields as above);
 - `normal` (same fields as above).
 
@@ -81,6 +81,7 @@ Errors:
 | 400 | `invalid_request` | Malformed JSON, a missing or unknown field, a wrong type, or an invalid term (e.g. negative tick, `lastMonth` before `firstMonth`, a season range below the minimum). |
 | 404 | `city_not_found` | The city name is invalid or `<data>/<city>.parquet` does not exist. |
 | 422 | `data_error` | The file is unreadable or invalid, or a season has a missing day (the message names the season and date). |
+| 404 / 405 / 415 | `not_found` / `method_not_allowed` / `unsupported_media_type` | Unknown route, wrong HTTP method or wrong content type (Spring's own status, kept; not turned into 500). |
 | 500 | `internal_error` | Anything else. Logged; no stack trace in the response. |
 
 **Worked example:** a test-written file has five January seasons with indices 360, 400,
@@ -93,13 +94,15 @@ gives:
 - [ ] Given the worked-example file and request, when `POST /price` is called, then the response is 200 with burn **160.0**, normal **225.675833** (tolerance 1e-6), μ = 400, σ = 28.284271, five seasons in year order, and `detrended` null.
 - [ ] Given `targetSeasonYear` and at least 10 seasons, then `detrended` equals `DetrendedBurnAnalysis.run` and `IndexDistributionAnalysis.runDetrended` on the same input (slope, its standard error, shifted seasons, both prices).
 - [ ] Given `targetSeasonYear` with fewer than 10 seasons, then 400 `invalid_request`, with a message naming the minimum.
+- [ ] Given fewer than 5 seasons (the normal model's minimum, spec 005; `normal` is always computed), then 400 `invalid_request`, with a message naming the minimum.
+- [ ] Given an unknown route, a wrong method (e.g. `GET /price`) or a non-JSON content type, then 404 / 405 / 415 with the `{error, message}` body.
 - [ ] Given each priced field (`strikeHddDegC`, `tickGbpPerDegC`, `capGbp`, `baseC`, `dailyHddDecimals`, months, season years), the API result equals the library result for the same terms. This holds for call, put and swap, with and without a cap.
 - [ ] Given malformed JSON, a missing required field, an unknown field, a wrong type or an invalid term, then 400 `invalid_request`, with a message naming the field.
 - [ ] Given an unknown city (`paris`, with no file) or an invalid name (`../x`), then 404 `city_not_found`. No path outside the data folder is ever read.
 - [ ] Given a file with a missing day inside a season, then 422 `data_error`, with a message naming the season and date. Given a file outside the range limits (spec 001 amendment A), then 422.
 - [ ] Given an unexpected exception, then 500 `internal_error`, with no stack trace or file system details in the body.
 - [ ] Given `GET /health`, then 200 `{"status":"ok"}`.
-- [ ] Given the data folder is set by configuration (e.g. `pricer.data-dir`), then files are read from it. The default is `data/pricer` relative to the repo root.
+- [ ] Given the data folder is set by configuration (e.g. `pricer.data-dir`), then files are read from it. The default is `data/pricer` relative to the repo root (`bootRun` runs from the repo root).
 - [ ] Given a republished file, then the next request uses it without a restart.
 - [ ] The server binds to `127.0.0.1` only.
 - [ ] README shows how to start the server and a `curl` example. Every public class has Javadoc. The `api` package holds no pricing logic.
@@ -112,6 +115,19 @@ gives:
    and detrended normal when `targetSeasonYear` is given). There is no `method` field.
 3. **Season range always explicit** (`firstSeasonYear` / `lastSeasonYear` required), to
    keep back-tests free of look-ahead.
+
+4. **Planner findings (owner OK 2026-11-22):**
+   - The loader throws the same exception type for a missing file and for bad data, so a
+     small library change adds `CityFileNotFoundException extends TemperatureDataException`
+     (missing file only), mapped to 404. An invalid city name (the loader's
+     `IllegalArgumentException`) is also mapped to 404, but only around the load call.
+   - `bootRun` runs from the repo root, so the default `data/pricer` is the same folder as
+     data-prep's.
+   - Detrended seasons also carry `seasonMeanTempC` and `shiftDegC`.
+   - Spring's own 404 / 405 / 415 keep their status, with the JSON error body.
+   - `/price` needs at least 5 seasons because `normal` is always computed; documented.
+   - Test helper `ParquetFixtures` becomes public so API tests can write Parquet files
+     (visibility only).
 
 ## Open questions
 None.
