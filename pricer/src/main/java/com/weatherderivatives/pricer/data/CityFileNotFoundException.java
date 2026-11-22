@@ -2,7 +2,11 @@ package com.weatherderivatives.pricer.data;
 
 import com.weatherderivatives.pricer.index.TemperatureDataException;
 
-/** A city's temperature file does not exist (spec 006). Stub: not thrown yet. */
+/**
+ * A city's temperature file does not exist. A subclass of {@link TemperatureDataException} so
+ * existing callers are unaffected, while the REST layer can tell a missing file (404) from bad data
+ * (422) without matching messages (spec 006).
+ */
 public class CityFileNotFoundException extends TemperatureDataException {
 
   private static final long serialVersionUID = 1L;

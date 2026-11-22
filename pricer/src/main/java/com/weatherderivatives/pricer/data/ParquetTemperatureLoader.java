@@ -66,11 +66,12 @@ public final class ParquetTemperatureLoader {
    * @param city city name matching {@code [a-z0-9_-]+}, e.g. {@code london}
    * @return the city's daily temperatures
    * @throws IllegalArgumentException if {@code city} does not match {@code [a-z0-9_-]+}
-   * @throws TemperatureDataException if the file is missing (names the path), a required column is
-   *     missing or has the wrong type (names the column), a cell is null (names the date and
-   *     column), a finite value lies outside {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names
-   *     the date, column, value and file; checked before {@code tminC > tmaxC}), a date repeats or
-   *     a row's values are invalid (names the date)
+   * @throws CityFileNotFoundException if the file is missing (names the path)
+   * @throws TemperatureDataException if a required column is missing or has the wrong type (names
+   *     the column), a cell is null (names the date and column), a finite value lies outside
+   *     {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names the date, column, value and file;
+   *     checked before {@code tminC > tmaxC}), a date repeats or a row's values are invalid (names
+   *     the date)
    */
   public DailyTemps load(String city) {
     if (city == null || !CITY_NAME.matcher(city).matches()) {
@@ -78,7 +79,7 @@ public final class ParquetTemperatureLoader {
     }
     Path file = processedDir.resolve(city + ".parquet");
     if (!Files.isRegularFile(file)) {
-      throw new TemperatureDataException("temperature file not found: " + file);
+      throw new CityFileNotFoundException("temperature file not found: " + file);
     }
     try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(file))) {
       FileSchema schema = reader.getFileSchema();

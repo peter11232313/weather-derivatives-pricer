@@ -6,7 +6,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** {@code POST /price} and {@code GET /health}. Stub. */
+/**
+ * {@code POST /price} and {@code GET /health} (spec 006); a thin layer over {@link PriceService}.
+ */
 @RestController
 public class PriceController {
 
@@ -39,6 +41,6 @@ public class PriceController {
    */
   @GetMapping(path = "/health", produces = "application/json")
   public Map<String, String> health() {
-    throw new UnsupportedOperationException("not implemented");
+    return Map.of("status", "ok");
   }
 }
