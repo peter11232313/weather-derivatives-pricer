@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- pricer (spec 005): index-distribution pricing. `IndexDistributionAnalysis.run` /
+  `runDetrended` fit a normal to the seasonal settlement index values (sample σ, n − 1) and
+  price by closed-form expected payoff (`IndexDistributionPricing`), for call, put and swap
+  with or without a cap. In-house normal CDF (Cody erfc); no new dependency.
+
 ### Changed
 - pricer (spec 001 amendment A): `ParquetTemperatureLoader` rejects finite `tmax_c` /
   `tmin_c` outside −90..60 °C (inclusive), naming the date, column, value and file. A file

@@ -162,6 +162,19 @@ Contents
 | 5d.14 | Merge. | Merged via PR #9 (`4cd9fd0`); worktree and branch removed. The London build must be restarted (no download was running) to fetch 1995–2023 and the two edge days. |
 | 5d.15 | Personal subagents (`code-reviewer`, `planner`, `test-writer`) lived only in `~/.claude/agents/`. | Owner: **copy, not move**, into `.claude/agents/` (identical files, no private paths). Project copies take precedence inside the repo, so future edits go there. |
 
+## 5e. Spec 005 — index-distribution pricing
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5e.1 | Use 1995–2001 while the download runs? | Yes: `process` reads only local year files. With 09–09 windows the range is 1991-01-02..2001-12-30 (edge hours need 1990 and 2002). Published 4,016 rows; burn on 10 seasons. Detrended slopes not significant; extrapolating to 2026 multiplies noise (Jan £436 → £1,691). |
+| 5e.2 | Spec decisions. | Owner OK: normal only; minimum 5 seasons for `run`, 10 for `runDetrended`; no parameter uncertainty in v1. |
+| 5e.3 | Planner: the 2-season fit example contradicted the 5-season minimum. | Five seasons {360, 400, 400, 400, 440}: same μ, σ and price (owner OK). |
+| 5e.4 | Normal CDF: no library in the project. Parity at 1e-9 on £10⁴ prices needs Φ(d) + Φ(−d) = 1 to ~1e-13. | In-house W. J. Cody erfc (netlib CALERF), package-private; no commons-math dependency. Coefficients checked digit for digit by the quant reviewer; max relative error 1.7e-13 over −30..10. |
+| 5e.5 | Rounding can leave a capped price 1 ulp above the cap. | Capped prices clamped to [0, min(C, uncapped)] (call, put) and [−C, C] (swap); the capped formulas are pinned by the known answers. |
+| 5e.6 | Identical seasons: sum / n can be 1 ulp off the common value. | When all seasons are equal, μ = that index exactly and σ = 0, so the price is the exact payoff. |
+| 5e.7 | Test-writer may not write under `src/main`, so it could not add compile-only stubs. | It built them in a scratch copy; I reviewed and copied them in, then confirmed 50 of 51 new tests red. |
+| 5e.8 | Quant review: a finite but huge cap made K + L overflow and the price NaN. | Treat the cap as absent when K + L is not finite (it can never bind); regression test added first. Tail known answers (Φ(−6), Φ(−20), Φ(−30)) from a 50-digit reference, because Python's `math.erfc` is off at Φ(−30) in the 13th digit. Monotonicity test moved to Cody's real breakpoint 0.46875·√2. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.
@@ -187,6 +200,7 @@ Contents
 | Daily-HDD half-up rounding in exact decimal | spec 003 (amended), [ADR 0004](decisions/0004-settlement-rounding-daily-hdd.md) |
 | Season label = first accrual year; no detrending yet | spec 003 |
 | One Copernicus download at a time | PROGRESS.md |
+| Normal index-distribution pricing; in-house Cody erfc; min 5 / 10 seasons | spec 005 |
 
 ## 8. Still open
 

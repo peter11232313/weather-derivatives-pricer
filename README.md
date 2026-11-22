@@ -12,6 +12,7 @@ Prices HDD/CDD weather derivatives on European cities using ERA5 temperatures.
 | [002](docs/specs/002-era5-daily-temps.md) | ERA5 → daily station temperatures (data-prep) | done |
 | [003](docs/specs/003-burn-analysis.md) | HDD contract payoffs + burn analysis | done |
 | [004](docs/specs/004-detrended-burn.md) | Detrended burn analysis | done |
+| [005](docs/specs/005-index-distribution.md) | Index-distribution pricing (normal) | done |
 
 See [docs/PROGRESS.md](docs/PROGRESS.md) for what's next.
 
@@ -172,6 +173,24 @@ d.burn().burnPriceGbp(); d.slopeDegCPerYear(); d.slopeStdErrDegCPerYear(); d.sea
 For a back-test, end the window before the target season. Seasons are labelled by the
 year of their first accrual day (Nov–Mar 1991 = winter 1991/92), for both the trend and
 the shift. With few seasons the slope is noisy; check `slopeStdErrDegCPerYear()`.
+
+## Index-distribution pricing (spec 005)
+Fits a normal distribution to the seasons' settlement index values (the same values burn
+reports, with the contract's rounding) and prices the contract as its expected payoff in
+closed form, for call, put and swap with or without a cap. Undiscounted, no risk loading.
+At least 5 seasons (10 for the detrended fit):
+
+```java
+IndexDistributionResult r = IndexDistributionAnalysis.run(call, temps, 1991, 2023);
+r.expectedPayoffGbp(); r.meanIndexHddDegC(); r.sdIndexHddDegC(); r.burn().burnPriceGbp();
+
+IndexDistributionResult d = IndexDistributionAnalysis.runDetrended(call, temps, 1991, 2023, 2024);
+
+double priceGbp = IndexDistributionPricing.expectedPayoffGbp(call, 400.0, 50.0); // μ, σ in °C·day
+```
+
+The normal CDF is in-house (W. J. Cody's erfc), so there is no new dependency. The fitted
+σ is itself uncertain (about ±25% with 10 seasons), which the price does not include.
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`

@@ -1,6 +1,6 @@
 # 005 — Index-distribution pricing (normal)
 
-_Status: approved by the owner 2026-11-22._
+_Status: approved by the owner 2026-11-22; implemented._
 
 ## Why
 Burn prices a contract as the average of its past payoffs, so with 10–33 seasons the
@@ -76,18 +76,18 @@ cannot reach. For London (μ ≥ 8σ: January μ ≈ 414, σ ≈ 35; Nov–Mar �
 σ ≈ 110) that probability is below 1e-15, so it is documented rather than truncated.
 
 ## Acceptance criteria
-- [ ] Given μ = 400, σ = 50, tick £20, then `expectedPayoffGbp` returns each value in the worked-example table (tolerance 1e-6).
-- [ ] Given σ = 0, then the price equals `HddPayoff` at μ for call, put and swap, with and without a cap (e.g. call K = 380 on μ = 400 → £400; with cap £300 → £300).
-- [ ] Given a non-finite or negative μ, or a non-finite or negative σ, then `IllegalArgumentException` names the argument.
-- [ ] Given put-call parity without a cap, then call(K) − put(K) = t · (μ − K) (tolerance 1e-9, several K including far out of the money).
-- [ ] Given a cap, then the price is never above the cap and never above the uncapped price (call, put; swap within ±cap).
-- [ ] Given σ → large for an at-the-money call, then the price grows like `t · σ · φ(0)` (with σ = 1e4: £79,788.456 at a £20 tick).
-- [ ] Given five seasons with index 360, 400, 400, 400, 440 (synthetic temperatures), when `run` is called, then μ = 400, σ = 28.284271 and a call at K = 400 with a £20 tick prices at **225.675833** (tolerance 1e-6); `burn()` equals `BurnAnalysis.run` on the same input.
-- [ ] Given the contract's daily-HDD rounding, then the fit uses the rounded settlement index (the same index values as `BurnAnalysis` reports).
-- [ ] Given `runDetrended`, then μ and σ are fitted to the shifted index values that `DetrendedBurnAnalysis` reports for the same target, and `burn()` equals its burn.
-- [ ] Given fewer seasons than the minimum (5 for `run`, 10 for `runDetrended`) or `firstSeasonYear > lastSeasonYear`, then `IllegalArgumentException` before any data is read; a missing day names the season and date (as burn does).
-- [ ] Given all seasons with the same index, then σ = 0 and the price equals that season's payoff.
-- [ ] Javadoc on every public method with units; the formulas and the negative-index note are in the class Javadoc; README has a usage example.
+- [x] Given μ = 400, σ = 50, tick £20, then `expectedPayoffGbp` returns each value in the worked-example table (tolerance 1e-6).
+- [x] Given σ = 0, then the price equals `HddPayoff` at μ for call, put and swap, with and without a cap (e.g. call K = 380 on μ = 400 → £400; with cap £300 → £300).
+- [x] Given a non-finite or negative μ, or a non-finite or negative σ, then `IllegalArgumentException` names the argument.
+- [x] Given put-call parity without a cap, then call(K) − put(K) = t · (μ − K) (tolerance 1e-9, several K including far out of the money).
+- [x] Given a cap, then the price is never above the cap and never above the uncapped price (call, put; swap within ±cap).
+- [x] Given σ → large for an at-the-money call, then the price grows like `t · σ · φ(0)` (with σ = 1e4: £79,788.456 at a £20 tick).
+- [x] Given five seasons with index 360, 400, 400, 400, 440 (synthetic temperatures), when `run` is called, then μ = 400, σ = 28.284271 and a call at K = 400 with a £20 tick prices at **225.675833** (tolerance 1e-6); `burn()` equals `BurnAnalysis.run` on the same input.
+- [x] Given the contract's daily-HDD rounding, then the fit uses the rounded settlement index (the same index values as `BurnAnalysis` reports).
+- [x] Given `runDetrended`, then μ and σ are fitted to the shifted index values that `DetrendedBurnAnalysis` reports for the same target, and `burn()` equals its burn.
+- [x] Given fewer seasons than the minimum (5 for `run`, 10 for `runDetrended`) or `firstSeasonYear > lastSeasonYear`, then `IllegalArgumentException` before any data is read; a missing day names the season and date (as burn does).
+- [x] Given all seasons with the same index, then σ = 0 and the price equals that season's payoff.
+- [x] Javadoc on every public method with units; the formulas and the negative-index note are in the class Javadoc; README has a usage example.
 
 ## Decisions (approved 2026-11-22)
 1. **Minimum seasons:** 5 for `run` (a normal fitted to 2 points means little; burn allows 2)
