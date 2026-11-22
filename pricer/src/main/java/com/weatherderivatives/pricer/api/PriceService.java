@@ -1,5 +1,6 @@
 package com.weatherderivatives.pricer.api;
 
+import com.weatherderivatives.pricer.contract.ContractType;
 import com.weatherderivatives.pricer.contract.HddContract;
 import com.weatherderivatives.pricer.data.CityFileNotFoundException;
 import com.weatherderivatives.pricer.index.DailyTemps;
@@ -11,10 +12,13 @@ import com.weatherderivatives.pricer.model.IndexDistributionAnalysis;
 import com.weatherderivatives.pricer.model.IndexDistributionResult;
 import com.weatherderivatives.pricer.model.SeasonOutcome;
 import com.weatherderivatives.pricer.model.SeasonTrend;
+import java.time.DateTimeException;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,9 +45,8 @@ public class PriceService {
    *
    * @param request the request
    * @return burn and normal prices, plus detrended results when a target season is given
-   * @throws InvalidRequestException if a required field is missing (names the field)
-   * @throws IllegalArgumentException if a contract term or the season range is invalid (the library
-   *     names the field or the minimum)
+   * @throws InvalidRequestException if a required field is missing, or a contract term or the
+   *     season range is invalid (the library's message names the field or the minimum)
    * @throws CityNotFoundException if the city name is invalid or has no data file
    * @throws com.weatherderivatives.pricer.index.TemperatureDataException if the data are invalid or
    *     a season has a missing day
@@ -57,30 +60,53 @@ public class PriceService {
     int last = required(request.lastSeasonYear(), "lastSeasonYear");
     DailyTemps temps = load(request.city());
 
-    IndexDistributionResult plain = IndexDistributionAnalysis.run(contract, temps, first, last);
-    DetrendedDto detrended = null;
-    if (request.targetSeasonYear() != null) {
-      int target = request.targetSeasonYear();
-      IndexDistributionResult normal =
-          IndexDistributionAnalysis.runDetrended(contract, temps, first, last, target);
-      DetrendedBurnResult burn = DetrendedBurnAnalysis.run(contract, temps, first, last, target);
-      detrended = detrended(burn, normal);
+    return clientErrors(() -> {
+      IndexDistributionResult plain = IndexDistributionAnalysis.run(contract, temps, first, last);
+      DetrendedDto detrended = null;
+      if (request.targetSeasonYear() != null) {
+        int target = request.targetSeasonYear();
+        IndexDistributionResult normal =
+            IndexDistributionAnalysis.runDetrended(contract, temps, first, last, target);
+        DetrendedBurnResult burn = DetrendedBurnAnalysis.run(contract, temps, first, last, target);
+        detrended = detrended(burn, normal);
+      }
+      return new PriceResponse(
+          request.city(), seasons(plain.burn()), burn(plain.burn()), normal(plain), detrended);
+    });
+  }
+
+  /**
+   * Runs a library call, turning its argument errors (invalid term, season range, a season year
+   * outside the calendar) into {@link InvalidRequestException}. Only these calls are wrapped, so an
+   * {@code IllegalArgumentException} from anywhere else stays a 500.
+   */
+  private static <T> T clientErrors(Supplier<T> call) {
+    try {
+      return call.get();
+    } catch (IllegalArgumentException | DateTimeException e) {
+      throw new InvalidRequestException(e.getMessage());
     }
-    return new PriceResponse(
-        request.city(), seasons(plain.burn()), burn(plain.burn()), normal(plain), detrended);
   }
 
   private static HddContract contract(PriceRequest r) {
     required(r.city(), "city");
-    return new HddContract(
-        required(r.type(), "type"),
-        required(r.firstMonth(), "firstMonth"),
-        required(r.lastMonth(), "lastMonth"),
-        r.baseC() == null ? HddIndex.DEFAULT_BASE_C : r.baseC(),
-        required(r.strikeHddDegC(), "strikeHddDegC"),
-        required(r.tickGbpPerDegC(), "tickGbpPerDegC"),
-        r.capGbp() == null ? OptionalDouble.empty() : OptionalDouble.of(r.capGbp()),
-        r.dailyHddDecimals() == null ? OptionalInt.empty() : OptionalInt.of(r.dailyHddDecimals()));
+    ContractType type = required(r.type(), "type");
+    YearMonth firstMonth = required(r.firstMonth(), "firstMonth");
+    YearMonth lastMonth = required(r.lastMonth(), "lastMonth");
+    double strike = required(r.strikeHddDegC(), "strikeHddDegC");
+    double tick = required(r.tickGbpPerDegC(), "tickGbpPerDegC");
+    return clientErrors(() ->
+        new HddContract(
+            type,
+            firstMonth,
+            lastMonth,
+            r.baseC() == null ? HddIndex.DEFAULT_BASE_C : r.baseC(),
+            strike,
+            tick,
+            r.capGbp() == null ? OptionalDouble.empty() : OptionalDouble.of(r.capGbp()),
+            r.dailyHddDecimals() == null
+                ? OptionalInt.empty()
+                : OptionalInt.of(r.dailyHddDecimals())));
   }
 
   private DailyTemps load(String city) {

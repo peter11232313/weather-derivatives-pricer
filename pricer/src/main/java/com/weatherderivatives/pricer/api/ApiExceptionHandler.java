@@ -1,7 +1,6 @@
 package com.weatherderivatives.pricer.api;
 
 import com.weatherderivatives.pricer.index.TemperatureDataException;
-import java.time.DateTimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -13,7 +12,9 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.InputCoercionException;
 import tools.jackson.core.exc.StreamReadException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 /**
@@ -24,7 +25,8 @@ import tools.jackson.databind.exc.UnrecognizedPropertyException;
  *       term or season range.
  *   <li>404 {@code city_not_found}: invalid city name or no data file.
  *   <li>422 {@code data_error}: invalid data or a missing day.
- *   <li>Spring's own 404 / 405 / 415 keep their status, with the same JSON body.
+ *   <li>Spring's own 404 / 405 / 406 / 415 keep their status and headers (e.g. {@code Allow}), with
+ *       the same JSON body; Spring 5xx errors are logged.
  *   <li>500 {@code internal_error}: anything else, logged, with a fixed message.
  * </ul>
  */
@@ -48,17 +50,15 @@ public class ApiExceptionHandler {
   }
 
   /**
-   * Missing field, invalid term or season range.
+   * Missing field, invalid term or season range. {@link PriceService} turns the library's argument
+   * errors into {@link InvalidRequestException}; any other {@code IllegalArgumentException} is a
+   * bug and goes to 500.
    *
    * @param e the exception
    * @return 400 with the library's message
    */
-  @ExceptionHandler({
-    InvalidRequestException.class,
-    IllegalArgumentException.class,
-    DateTimeException.class
-  })
-  public ResponseEntity<ApiError> invalid(RuntimeException e) {
+  @ExceptionHandler(InvalidRequestException.class)
+  public ResponseEntity<ApiError> invalid(InvalidRequestException e) {
     return error(HttpStatus.BAD_REQUEST, "invalid_request", e.getMessage());
   }
 
@@ -92,6 +92,7 @@ public class ApiExceptionHandler {
           case 404 -> "not_found";
           case 405 -> "method_not_allowed";
           case 415 -> "unsupported_media_type";
+          case 406 -> "not_acceptable";
           case 400 -> "invalid_request";
           default -> status.is4xxClientError() ? "invalid_request" : "internal_error";
         };
@@ -100,9 +101,16 @@ public class ApiExceptionHandler {
           case 404 -> "no such endpoint";
           case 405 -> "method not allowed for this endpoint";
           case 415 -> "content type must be application/json";
+          case 406 -> "responses are application/json only";
           default -> "request rejected";
         };
-    return error(status, code, message);
+    if (status.is5xxServerError()) {
+      LOG.error("server error from Spring MVC", (Throwable) e);
+    }
+    return ResponseEntity.status(status)
+        .headers(e.getHeaders()) // e.g. Allow on 405, Accept on 415
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(new ApiError(code, message));
   }
 
   /**
@@ -134,8 +142,20 @@ public class ApiExceptionHandler {
     if (cause instanceof UnrecognizedPropertyException u) {
       return "unknown field: " + u.getPropertyName();
     }
+    if (cause instanceof InputCoercionException c) {
+      String field = currentField(c);
+      return field == null
+          ? "number out of range for its field"
+          : "number out of range for field: " + field;
+    }
     if (cause instanceof StreamReadException) {
       return "malformed JSON";
+    }
+    if (cause instanceof MismatchedInputException m
+        && m.getPath().isEmpty()
+        && m.getOriginalMessage() != null
+        && m.getOriginalMessage().startsWith("Trailing token")) {
+      return "unexpected content after the JSON object";
     }
     if (cause instanceof JacksonException j) {
       String field = fieldPath(j);
@@ -144,6 +164,14 @@ public class ApiExceptionHandler {
           : "invalid value for field: " + field;
     }
     return "request body is missing or unreadable";
+  }
+
+  private static String currentField(InputCoercionException e) {
+    try {
+      return e.processor() == null ? null : e.processor().currentName();
+    } catch (RuntimeException ignored) {
+      return null; // the parser may already be closed; the message still says what went wrong
+    }
   }
 
   private static String fieldPath(JacksonException e) {
