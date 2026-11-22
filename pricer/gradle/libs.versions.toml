@@ -5,6 +5,7 @@ googleJavaFormat = "2.0.0"
 duckdb = "2.0.0.1"
 hardwood = "1.0.1.Final"
 snappy = "1.1.10.12"
+springBoot = "4.1.3"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
@@ -16,6 +17,12 @@ hardwood-core = { module = "dev.hardwood:hardwood-core", version.ref = "hardwood
 snappy-java = { module = "org.xerial.snappy:snappy-java", version.ref = "snappy" }
 # Test only: writes Parquet fixtures into @TempDir so no data files are committed.
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
+# REST layer only (spec 006). Imported as a Gradle platform (not io.spring.dependency-management)
+# so versions declared here, e.g. junit 6.1.3 over Boot's 6.0.3, still win.
+spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
+spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
