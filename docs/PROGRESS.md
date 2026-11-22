@@ -5,7 +5,7 @@ _Last updated: 2026-11-20_
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
   - `HddIndex`, `DailyTemp`/`DailyTemps`, `ParquetTemperatureLoader` (Hardwood); 69 tests; 17/17 criteria ticked.
-- **Spec 001 amendment A — physical range check**: branch `feat/001a-range-check` (stacked on `chore/repo-subagents`), ready for PR.
+- **Spec 001 amendment A — physical range check**: merged to `main` via [PR #11](https://github.com/peter11232313/weather-derivatives-pricer/pull/11) (`dfe34e6`); subagents copied into `.claude/agents/` via PR #10.
   - Loader rejects finite `tmax_c`/`tmin_c` outside −90..60 °C inclusive; order: non-finite, Tmax range, Tmin range, `tmin > tmax`.
   - 213 Java tests green; spotless + javadoc clean; 9/9 criteria ticked. Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; test assertions tightened (owner OK).
 - **Spec 001 open questions resolved** (PR #2): full-precision index; [ADR 0002](decisions/0002-daily-tmax-tmin-source.md) `mx2t`/`mn2t`; [ADR 0003](decisions/0003-city-value-at-settlement-station.md) station interpolation; `era5-data` skill aligned.
@@ -34,11 +34,16 @@ _Last updated: 2026-11-20_
   - 462 Python tests green; ruff clean (incl. a 0.5 °C guard on the midpoint, owner OK). Reviewed by `code-reviewer` (no blockers) and `quant-reviewer` (blocker Tmin > Tmax fixed by the owner's option 3).
   - Manual: London 1991-01-02..1994-12-30 reprocessed (3 midpoint days), published to scratch, loaded by Java (1,459 rows). Monthly HDD new − old: mean −3.94, sd 2.79, range −9.21..+4.25.
 
+- **Spec 005 — index-distribution pricing (normal)**: branch `feat/005-index-distribution`, ready for PR.
+  - `NormalDistribution` (in-house Cody erfc; max relative error 1.7e-13 over −30..10 against a 50-digit reference), `IndexDistributionPricing` (closed forms, caps, σ = 0), `IndexDistributionAnalysis` (`run` ≥ 5 seasons, `runDetrended` ≥ 10), `IndexDistributionResult`.
+  - 266 Java tests green; spotless + javadoc clean; 12/12 criteria ticked. Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; overflow NaN fixed, tests added (owner OK).
+- **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.
+
 ## Next
 1. **Finish the 1991–2024 download** (multi-year requests, running in the user's terminal; one command at a time; keep the PC awake). `python -m dataprep build --city london --start 1991-01-01 --end 2024-12-31` again fetches the two edge days (1990-12-31, 2025-01-01) and reprocesses with the 09–09 windows → expect 12,419 rows; republish (the old file lacks window metadata).
 2. Real burn on 1991–2023 London seasons once the data is published.
 3. Real detrended burn on London once 1991–2023 is published (needs ≥ 10 seasons).
-4. Later: CDD index, collars/strips, index-distribution and OU models, REST endpoint.
+4. Later: CDD index, collars/strips, OU daily simulation, REST endpoint; kernel-density amendment to spec 005.
 
 ## Open questions
 **Data guards**
