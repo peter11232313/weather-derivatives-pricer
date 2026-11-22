@@ -175,6 +175,21 @@ Contents
 | 5e.7 | Test-writer may not write under `src/main`, so it could not add compile-only stubs. | It built them in a scratch copy; I reviewed and copied them in, then confirmed 50 of 51 new tests red. |
 | 5e.8 | Quant review: a finite but huge cap made K + L overflow and the price NaN. | Treat the cap as absent when K + L is not finite (it can never bind); regression test added first. Tail known answers (Φ(−6), Φ(−20), Φ(−30)) from a 50-digit reference, because Python's `math.erfc` is off at Φ(−30) in the 13th digit. Monotonicity test moved to Cody's real breakpoint 0.46875·√2. |
 
+## 5f. Spec 006 — REST price endpoint
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5f.1 | Next step while the download runs. | REST endpoint: the main missing piece for using the app without Java; AGENTS.md already named `bootRun` → `POST /price`. |
+| 5f.2 | Spec decisions. | Owner OK: Spring Boot web starter (new dependency, justified in the PR); one call returns every method; season range always explicit. |
+| 5f.3 | Planner: the loader threw the same exception for a missing file and for bad data, and an invalid name was an `IllegalArgumentException` like a bad term. | `CityFileNotFoundException extends TemperatureDataException` (missing file only) → 404; the name IAE → 404 only around the load call. Owner OK, with: `bootRun` from the repo root, detrended seasons carry mean and shift, Spring's 404/405/415 kept, 5-season minimum documented. |
+| 5f.4 | Boot's BOM manages JUnit 6.0.3; the project uses 6.1.3. | Import the BOM as a Gradle platform, not `io.spring.dependency-management`, so the higher version wins (checked with `dependencyInsight`). Boot 4.1.3 chosen over the days-old 4.2.0. |
+| 5f.5 | Spring Boot's default Jackson ignores unknown fields, coerces `"400"` to 400 and truncates 1.5. | `StrictJsonConfig` turns these off; tests assert the behaviour rather than trusting property names. |
+| 5f.6 | `@ExceptionHandler(ErrorResponse.class)` does not compile: `ErrorResponse` is an interface. | The catch-all handler checks `instanceof ErrorResponse` and keeps Spring's status. |
+| 5f.7 | Two heredoc edit scripts failed in Git Bash ("unexpected EOF while looking for matching `'`"). | Edit scripts written to scratch files and run from there. |
+| 5f.8 | Code review BLOCKER: `"type": 1` was read as the enum index and priced a PUT with 200. Also `"city": true` → 404, no `Allow` header on 405, out-of-range numbers not naming the field, IAE → 400 everywhere. | Red tests first (owner OK), then `FAIL_ON_NUMBERS_FOR_ENUMS` and enum/text coercion off, headers copied, field named, library argument errors wrapped as 400 only around the contract and analysis calls; 406 `not_acceptable`; Boot `/error` never includes internals. |
+| 5f.9 | Quant review: no blockers. The detrended burn is computed twice (once inside `runDetrended`). | Kept: both runs are deterministic and identical; README explains that prices are undiscounted, which uncertainties are excluded, and how to avoid look-ahead. |
+| 5f.10 | The test HTML report crashed on a stale `pricer/build` folder in the working tree. | `./gradlew clean`; a clean build passes. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.
@@ -201,6 +216,7 @@ Contents
 | Season label = first accrual year; no detrending yet | spec 003 |
 | One Copernicus download at a time | PROGRESS.md |
 | Normal index-distribution pricing; in-house Cody erfc; min 5 / 10 seasons | spec 005 |
+| REST endpoint: Spring Boot via Gradle platform; all methods in one call; localhost only | spec 006 |
 
 ## 8. Still open
 

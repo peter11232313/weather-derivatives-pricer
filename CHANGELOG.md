@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- pricer (spec 006): REST endpoint (Spring Boot 4.1.3, localhost only). `POST /price` returns
+  burn, normal and (with `targetSeasonYear`) detrended burn and normal prices in one call;
+  `GET /health`. Strict JSON; errors are `{error, message}` with 400 / 404 / 422 / 500.
+  `ParquetTemperatureLoader` throws `CityFileNotFoundException` (a `TemperatureDataException`)
+  for a missing file. Run with `cd pricer && ./gradlew bootRun`.
 - pricer (spec 005): index-distribution pricing. `IndexDistributionAnalysis.run` /
   `runDetrended` fit a normal to the seasonal settlement index values (sample σ, n − 1) and
   price by closed-form expected payoff (`IndexDistributionPricing`), for call, put and swap

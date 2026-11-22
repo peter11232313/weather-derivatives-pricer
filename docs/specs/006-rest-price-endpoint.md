@@ -1,6 +1,6 @@
 # 006 — REST price endpoint
 
-_Status: approved by the owner 2026-11-22._
+_Status: approved by the owner 2026-11-22; implemented._
 
 ## Why
 The pricer is a Java library today: pricing a contract means writing code. A local HTTP
@@ -91,21 +91,21 @@ gives:
 - **normal = £225.675833** (μ = 400, σ = 28.284271, as in spec 005).
 
 ## Acceptance criteria
-- [ ] Given the worked-example file and request, when `POST /price` is called, then the response is 200 with burn **160.0**, normal **225.675833** (tolerance 1e-6), μ = 400, σ = 28.284271, five seasons in year order, and `detrended` null.
-- [ ] Given `targetSeasonYear` and at least 10 seasons, then `detrended` equals `DetrendedBurnAnalysis.run` and `IndexDistributionAnalysis.runDetrended` on the same input (slope, its standard error, shifted seasons, both prices).
-- [ ] Given `targetSeasonYear` with fewer than 10 seasons, then 400 `invalid_request`, with a message naming the minimum.
-- [ ] Given fewer than 5 seasons (the normal model's minimum, spec 005; `normal` is always computed), then 400 `invalid_request`, with a message naming the minimum.
-- [ ] Given an unknown route, a wrong method (e.g. `GET /price`) or a non-JSON content type, then 404 / 405 / 415 with the `{error, message}` body.
-- [ ] Given each priced field (`strikeHddDegC`, `tickGbpPerDegC`, `capGbp`, `baseC`, `dailyHddDecimals`, months, season years), the API result equals the library result for the same terms. This holds for call, put and swap, with and without a cap.
-- [ ] Given malformed JSON, a missing required field, an unknown field, a wrong type or an invalid term, then 400 `invalid_request`, with a message naming the field.
-- [ ] Given an unknown city (`paris`, with no file) or an invalid name (`../x`), then 404 `city_not_found`. No path outside the data folder is ever read.
-- [ ] Given a file with a missing day inside a season, then 422 `data_error`, with a message naming the season and date. Given a file outside the range limits (spec 001 amendment A), then 422.
-- [ ] Given an unexpected exception, then 500 `internal_error`, with no stack trace or file system details in the body.
-- [ ] Given `GET /health`, then 200 `{"status":"ok"}`.
-- [ ] Given the data folder is set by configuration (e.g. `pricer.data-dir`), then files are read from it. The default is `data/pricer` relative to the repo root (`bootRun` runs from the repo root).
-- [ ] Given a republished file, then the next request uses it without a restart.
-- [ ] The server binds to `127.0.0.1` only.
-- [ ] README shows how to start the server and a `curl` example. Every public class has Javadoc. The `api` package holds no pricing logic.
+- [x] Given the worked-example file and request, when `POST /price` is called, then the response is 200 with burn **160.0**, normal **225.675833** (tolerance 1e-6), μ = 400, σ = 28.284271, five seasons in year order, and `detrended` null.
+- [x] Given `targetSeasonYear` and at least 10 seasons, then `detrended` equals `DetrendedBurnAnalysis.run` and `IndexDistributionAnalysis.runDetrended` on the same input (slope, its standard error, shifted seasons, both prices).
+- [x] Given `targetSeasonYear` with fewer than 10 seasons, then 400 `invalid_request`, with a message naming the minimum.
+- [x] Given fewer than 5 seasons (the normal model's minimum, spec 005; `normal` is always computed), then 400 `invalid_request`, with a message naming the minimum.
+- [x] Given an unknown route, a wrong method (e.g. `GET /price`) or a non-JSON content type, then 404 / 405 / 415 with the `{error, message}` body.
+- [x] Given each priced field (`strikeHddDegC`, `tickGbpPerDegC`, `capGbp`, `baseC`, `dailyHddDecimals`, months, season years), the API result equals the library result for the same terms. This holds for call, put and swap, with and without a cap.
+- [x] Given malformed JSON, a missing required field, an unknown field, a wrong type or an invalid term, then 400 `invalid_request`, with a message naming the field.
+- [x] Given an unknown city (`paris`, with no file) or an invalid name (`../x`), then 404 `city_not_found`. No path outside the data folder is ever read.
+- [x] Given a file with a missing day inside a season, then 422 `data_error`, with a message naming the season and date. Given a file outside the range limits (spec 001 amendment A), then 422.
+- [x] Given an unexpected exception, then 500 `internal_error`, with no stack trace or file system details in the body.
+- [x] Given `GET /health`, then 200 `{"status":"ok"}`.
+- [x] Given the data folder is set by configuration (e.g. `pricer.data-dir`), then files are read from it. The default is `data/pricer` relative to the repo root (`bootRun` runs from the repo root).
+- [x] Given a republished file, then the next request uses it without a restart.
+- [x] The server binds to `127.0.0.1` only.
+- [x] README shows how to start the server and a `curl` example. Every public class has Javadoc. The `api` package holds no pricing logic.
 
 ## Decisions (approved 2026-11-22)
 1. **Framework: Spring Boot (web starter)**, as AGENTS.md already names `bootRun`. It brings
@@ -128,6 +128,12 @@ gives:
    - `/price` needs at least 5 seasons because `normal` is always computed; documented.
    - Test helper `ParquetFixtures` becomes public so API tests can write Parquet files
      (visibility only).
+
+5. **Review follow-ups (owner OK 2026-11-22):** enums and text fields reject numbers and
+   booleans (Jackson read `"type": 1` as the enum index, i.e. PUT); Spring's 405 / 415 keep their
+   `Allow` / `Accept` headers; 406 maps to `not_acceptable`; an out-of-range number names its field;
+   library argument errors become 400 only around the contract and analysis calls (any other
+   `IllegalArgumentException` is a 500).
 
 ## Open questions
 None.
