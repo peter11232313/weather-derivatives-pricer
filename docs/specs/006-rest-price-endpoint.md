@@ -1,0 +1,117 @@
+# 006 — REST price endpoint
+
+_Status: approved by the owner 2026-11-22._
+
+## Why
+The pricer is a Java library today: pricing a contract means writing code. A local HTTP
+endpoint lets a user (or a spreadsheet or script) send contract terms and get the burn,
+detrended burn and normal-model prices back in one call, as AGENTS.md already describes
+(`./gradlew bootRun` → `POST http://localhost:8080/price`).
+
+## Scope
+In:
+- `POST /price` with a JSON contract and season range. The response holds every method
+  that applies:
+  - always: burn (spec 003) and the normal model (spec 005);
+  - only when `targetSeasonYear` is given: detrended burn (spec 004) and the detrended
+    normal model.
+- `GET /health` returns `{"status":"ok"}`.
+- The data folder is configurable and defaults to `data/pricer`. The city file is read on
+  each request (a 12,000-row file loads in milliseconds), so a republished file is picked
+  up without a restart.
+- Errors return JSON `{"error": "<code>", "message": "<text>"}` with the status codes in
+  the table below. The message is the library's own (it names the field, date or path).
+- Package `...api` is a REST layer only: it maps JSON to `HddContract`, calls the existing
+  analyses and maps the results back. No pricing logic lives in it.
+
+Out (later specs):
+- Authentication, HTTPS, deployment, rate limiting. The server listens on localhost only.
+- CDD, collars, strips, discounting, OU simulation.
+- Caching loaded files; a web UI.
+
+## Inputs & outputs
+Request:
+
+```json
+{
+  "city": "london",
+  "type": "CALL",
+  "firstMonth": "2001-01",
+  "lastMonth": "2001-01",
+  "strikeHddDegC": 400.0,
+  "tickGbpPerDegC": 20.0,
+  "capGbp": null,
+  "dailyHddDecimals": 1,
+  "baseC": 18.0,
+  "firstSeasonYear": 1992,
+  "lastSeasonYear": 2001,
+  "targetSeasonYear": null
+}
+```
+
+- **Optional fields:** `capGbp` (null means uncapped), `dailyHddDecimals` (null means full
+  precision), `baseC` (default 18.0) and `targetSeasonYear` (null means no detrended
+  results).
+- **Unknown fields** are rejected, so a typo such as `strikeHdd` is not silently ignored.
+
+Response (200):
+
+```json
+{
+  "city": "london",
+  "seasons": [{"seasonYear": 1992, "indexHddDegC": 435.8, "payoffGbp": 716.0}, "..."],
+  "burn": {"priceGbp": 436.0, "stdErrorGbp": 178.10, "payoffStdDevGbp": 563.21,
+           "minPayoffGbp": 0.0, "maxPayoffGbp": 1732.0, "meanIndexHddDegC": 414.3},
+  "normal": {"priceGbp": 456.17, "meanIndexHddDegC": 414.3, "sdIndexHddDegC": 36.4},
+  "detrended": null
+}
+```
+
+When `targetSeasonYear` is given, `detrended` holds:
+- `targetSeasonYear`;
+- `slopeDegCPerYear` and `slopeStdErrDegCPerYear`;
+- the shifted `seasons`;
+- `burn` (same fields as above);
+- `normal` (same fields as above).
+
+Errors:
+
+| Status | `error` | When |
+| --- | --- | --- |
+| 400 | `invalid_request` | Malformed JSON, a missing or unknown field, a wrong type, or an invalid term (e.g. negative tick, `lastMonth` before `firstMonth`, a season range below the minimum). |
+| 404 | `city_not_found` | The city name is invalid or `<data>/<city>.parquet` does not exist. |
+| 422 | `data_error` | The file is unreadable or invalid, or a season has a missing day (the message names the season and date). |
+| 500 | `internal_error` | Anything else. Logged; no stack trace in the response. |
+
+**Worked example:** a test-written file has five January seasons with indices 360, 400,
+400, 400 and 440. A call with K = 400 and a £20 tick, full precision, seasons 2001..2005
+gives:
+- payoffs 0, 0, 0, 0 and 800, so **burn = £160.00**;
+- **normal = £225.675833** (μ = 400, σ = 28.284271, as in spec 005).
+
+## Acceptance criteria
+- [ ] Given the worked-example file and request, when `POST /price` is called, then the response is 200 with burn **160.0**, normal **225.675833** (tolerance 1e-6), μ = 400, σ = 28.284271, five seasons in year order, and `detrended` null.
+- [ ] Given `targetSeasonYear` and at least 10 seasons, then `detrended` equals `DetrendedBurnAnalysis.run` and `IndexDistributionAnalysis.runDetrended` on the same input (slope, its standard error, shifted seasons, both prices).
+- [ ] Given `targetSeasonYear` with fewer than 10 seasons, then 400 `invalid_request`, with a message naming the minimum.
+- [ ] Given each priced field (`strikeHddDegC`, `tickGbpPerDegC`, `capGbp`, `baseC`, `dailyHddDecimals`, months, season years), the API result equals the library result for the same terms. This holds for call, put and swap, with and without a cap.
+- [ ] Given malformed JSON, a missing required field, an unknown field, a wrong type or an invalid term, then 400 `invalid_request`, with a message naming the field.
+- [ ] Given an unknown city (`paris`, with no file) or an invalid name (`../x`), then 404 `city_not_found`. No path outside the data folder is ever read.
+- [ ] Given a file with a missing day inside a season, then 422 `data_error`, with a message naming the season and date. Given a file outside the range limits (spec 001 amendment A), then 422.
+- [ ] Given an unexpected exception, then 500 `internal_error`, with no stack trace or file system details in the body.
+- [ ] Given `GET /health`, then 200 `{"status":"ok"}`.
+- [ ] Given the data folder is set by configuration (e.g. `pricer.data-dir`), then files are read from it. The default is `data/pricer` relative to the repo root.
+- [ ] Given a republished file, then the next request uses it without a restart.
+- [ ] The server binds to `127.0.0.1` only.
+- [ ] README shows how to start the server and a `curl` example. Every public class has Javadoc. The `api` package holds no pricing logic.
+
+## Decisions (approved 2026-11-22)
+1. **Framework: Spring Boot (web starter)**, as AGENTS.md already names `bootRun`. It brings
+   JSON mapping, validation, error handling and `MockMvc` tests. The new dependency is
+   justified in the PR.
+2. **One call returns every method that applies** (burn and normal always; detrended burn
+   and detrended normal when `targetSeasonYear` is given). There is no `method` field.
+3. **Season range always explicit** (`firstSeasonYear` / `lastSeasonYear` required), to
+   keep back-tests free of look-ahead.
+
+## Open questions
+None.
