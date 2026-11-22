@@ -19,13 +19,14 @@ import java.util.Objects;
  * </ul>
  *
  * <p>The price is undiscounted, with no risk loading. With {@code σ = 0} it is {@link
- * HddPayoff#payoffGbp} at {@code μ}. A cap so large that {@code L} is not finite counts as no cap.
- * Rounding can leave a capped price a few ulp outside its bounds, so call and put prices are
- * clamped to {@code [0, min(C, uncapped)]} and capped swaps to {@code [−C, C]}.
+ * HddPayoff#payoffGbp} at {@code μ}. A cap so large that {@code K + L} is not finite counts as no
+ * cap: it can never bind ({@code K − L} stays finite because {@code K ≥ 0}). Rounding can leave a
+ * capped price a few ulp outside its bounds, so call and put prices are clamped to {@code [0,
+ * min(C, uncapped)]} and capped swaps to {@code [−C, C]}.
  *
  * <p><b>Negative index:</b> the normal gives some probability to {@code I < 0}, which a real HDD
- * index cannot reach. For London ({@code μ} at least 11 {@code σ} above 0) it is below 1e-15, so
- * the distribution is not truncated.
+ * index cannot reach. When {@code μ ≥ 8σ} it is below 1e-15 (London: January μ ≈ 414, σ ≈ 36;
+ * Nov–Mar μ ≈ 1,850, σ ≈ 111), so the distribution is not truncated.
  *
  * <p>Deep out-of-the-money prices are accurate in absolute terms (far below £1e-6), not relative to
  * their size.
@@ -64,7 +65,8 @@ public final class IndexDistributionPricing {
       capGbp = contract.capGbp().getAsDouble();
       capIndex = capGbp / tick;
     }
-    boolean capped = Double.isFinite(capIndex);
+    // K + L overflowing (L itself infinite, or finite but huge) means the cap can never bind.
+    boolean capped = Double.isFinite(k + capIndex);
 
     return switch (contract.type()) {
       case CALL -> {
@@ -90,7 +92,7 @@ public final class IndexDistributionPricing {
           yield tick * (mu - k);
         }
         double clipped = (mu - k) - call(mu, sigma, k + capIndex) + put(mu, sigma, k - capIndex);
-        yield Math.max(-capGbp, Math.min(capGbp, tick * clipped));
+        yield clamp(tick * clipped, -capGbp, capGbp);
       }
     };
   }
@@ -109,7 +111,7 @@ public final class IndexDistributionPricing {
     return Math.max(0.0, value);
   }
 
-  /** Clamps a capped call or put price to {@code [low, high]}. */
+  /** Clamps a capped price to {@code [low, high]} (rounding can leave it a few ulp outside). */
   private static double clamp(double value, double low, double high) {
     return Math.max(low, Math.min(high, value));
   }

@@ -14,6 +14,11 @@ import java.util.Objects;
  * with the contract's daily-HDD rounding. The mean is the burn's mean index; the standard deviation
  * is the two-pass sample standard deviation (n − 1). The price is {@link
  * IndexDistributionPricing#expectedPayoffGbp} under that normal.
+ *
+ * <p>The sample standard deviation is slightly biased low ({@code E[s] ≈ 0.973 σ} at 10 seasons),
+ * which lowers near-the-money prices by a few per cent; this is well inside the uncertainty of σ
+ * itself (about ±25% at 10 seasons), which is not modelled (spec 005, decision 3). Seasons of
+ * different lengths (151 and 152 days for Nov–Mar) are mixed as in {@link BurnAnalysis}.
  */
 public final class IndexDistributionAnalysis {
 
@@ -52,6 +57,11 @@ public final class IndexDistributionAnalysis {
    * Fits a normal to the seasons {@code firstSeasonYear..lastSeasonYear}, each shifted to the
    * climate of {@code targetSeasonYear} as in {@link DetrendedBurnAnalysis}, and prices the
    * contract.
+   *
+   * <p>σ uses n − 1 even though the trend fit used another degree of freedom, and it leaves out the
+   * uncertainty of the fitted slope; see {@link DetrendedBurnResult} for the slope and its standard
+   * error. For a back-test, the seasons must end before {@code targetSeasonYear} to avoid
+   * look-ahead.
    *
    * @param contract the contract terms; its months' years are only a template
    * @param temps daily temperatures covering every season
@@ -100,7 +110,7 @@ public final class IndexDistributionAnalysis {
   }
 
   /** Two-pass sample standard deviation (n − 1) of the seasons' index values. */
-  static double sampleSdIndexHddDegC(List<SeasonOutcome> seasons, double meanHddDegC) {
+  private static double sampleSdIndexHddDegC(List<SeasonOutcome> seasons, double meanHddDegC) {
     double squaredDeviations = 0.0;
     for (SeasonOutcome s : seasons) {
       double deviation = s.indexHddDegC() - meanHddDegC;
