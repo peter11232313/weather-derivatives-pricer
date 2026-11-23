@@ -11,8 +11,15 @@ description: End-to-end workflow for implementing a feature from a spec in docs/
 4. **Tests first** — delegate to `test-writer`. Confirm the new tests fail.
 5. **Implement** — smallest change per plan step; run tests after each; commit
    each green step with a conventional commit message.
-6. **Review** — delegate to `code-reviewer`, plus the domain reviewer
-   (`quant-reviewer` or `met-reviewer`). Fix every BLOCKER, then re-run review.
+6. **Review (loop)** — delegate to `code-reviewer`, plus every domain reviewer the
+   change touches: `quant-reviewer` for pricing maths, `met-reviewer` for weather/grid
+   data (both if both apply). Then repeat:
+   a. Read each reviewer's first line (`VERDICT: PASS` or `VERDICT: BLOCKED (n)`).
+   b. If every reviewer returned `VERDICT: PASS`, the step is done.
+   c. Otherwise fix every BLOCKER, run the tests, commit, and re-run **all** the
+      reviewers (not only the ones that blocked) on the updated branch.
+   After 3 rounds without all PASS, stop and show me the remaining blockers.
+   A missing or malformed VERDICT line counts as BLOCKED.
 7. **Wrap up** — tick the spec's criteria, update README/CHANGELOG, and give me a
    PR description: what, why, how tested, what's out of scope.
 Never skip step 4 or 6. Never edit tests to make them pass without asking me.
