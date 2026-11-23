@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 2026-11-22_
+_Last updated: 2026-11-24_
 
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
@@ -37,10 +37,11 @@ _Last updated: 2026-11-22_
 - **Spec 005 — index-distribution pricing (normal)**: merged to `main` via [PR #12](https://github.com/peter11232313/weather-derivatives-pricer/pull/12) (`6e3d83a`).
   - `NormalDistribution` (in-house Cody erfc; max relative error 1.7e-13 over −30..10 against a 50-digit reference), `IndexDistributionPricing` (closed forms, caps, σ = 0), `IndexDistributionAnalysis` (`run` ≥ 5 seasons, `runDetrended` ≥ 10), `IndexDistributionResult`.
   - 266 Java tests green; spotless + javadoc clean; 12/12 criteria ticked. Reviewed by `code-reviewer` and `quant-reviewer`: no blockers; overflow NaN fixed, tests added (owner OK).
-- **Spec 006 — REST price endpoint**: branch `feat/006-rest-price-endpoint`, ready for PR.
+- **Spec 006 — REST price endpoint**: merged to `main` via [PR #13](https://github.com/peter11232313/weather-derivatives-pricer/pull/13) (`b66bd3c`).
   - Spring Boot 4.1.3 web starter (Gradle platform; junit stays 6.1.3). `POST /price` (burn, normal, detrended burn and normal), `GET /health`; strict JSON; 400/404/422/500 plus Spring's 404/405/406/415 with headers; localhost only; `bootRun` from the repo root.
   - 368 Java tests green; spotless + javadoc clean; 15/15 criteria ticked. Reviewed by `code-reviewer` (blocker: `"type": 1` priced a PUT, fixed test-first) and `quant-reviewer` (no blockers; README notes on reading the numbers).
   - Manual: live server on London 1991–2001 gave the same prices as the library (Jan K400 burn £436.00, normal £456.17; detrended to 2002 £614.60 / £637.95).
+  - **Re-reviewed 2026-11-24 with the upgraded reviewers** (VERDICT format, new `met-reviewer`; PR #14): `code-reviewer`, `quant-reviewer` and `met-reviewer` all `VERDICT: PASS`, no blockers, so no fixes. 368 Java tests green (solo `--rerun`), spotless clean. Quant reproduced the London prices above to the cent; met reproduced the spec's worked example (burn £160, normal £225.675833). Non-blocking findings are under Open questions.
 - **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.
 
 ## Next
@@ -59,7 +60,16 @@ _Last updated: 2026-11-22_
 - Leap-day policy for historical seasons (keep 29 Feb vs drop / match target day count).
 - Detrending (quant review of spec 004): fit the trend on a longer/wider series than the contract months; a uniform shift moves only the mean, not the cold tail; guard far-future targets.
 
+**Spec 006 re-review findings (2026-11-24, non-blocking; owner to decide)**
+- met SHOULD: the Java loader ignores the ADR 0005 window metadata, so an old 00–24 UTC file under a custom `pricer.data-dir` is priced silently (~4 HDD/month bias). Read the metadata and fail with 422 if missing?
+- met SHOULD: `DailyTemps` Javadoc and AGENTS.md say "UTC calendar day"; under ADR 0005 the key is the settlement day per station windows. The `era5-data` skill still describes the old 01:00..00:00 day.
+- quant SHOULD: responses are labelled GBP for any city with a file; non-London contracts settle in €. Restrict to London or add a currency from the station registry.
+- quant SHOULD: normal price has no fit diagnostics (n, skewness); shoulder months may be skewed.
+- Both: `targetSeasonYear <= lastSeasonYear` is accepted silently (look-ahead); reject or flag? Quant: rename `priceGbp` → `expectedPayoffGbp`; flag detrended prices when |b|/SE(b) < 2. Met: should the response show the last ERA5-final (non-ERA5T) date?
+- code NITs: spec says the 404 message names the path but the API names the city only (better; amend the spec); 422 bodies include the full file path.
+
 **Repo housekeeping**
+- Parallel reviewers running Gradle in the same `pricer/build` crash with `EOFException` / `NoSuchFileException in-progress-results-generic.bin`; run the test suite once alone.
 - Subagents `code-reviewer`, `planner`, `test-writer` copied (not moved) into `.claude/agents/` (2026-11-20); the originals stay in `~/.claude/agents/`. Inside this repo the project copies take precedence, so edit those.
 - Java is not on PATH in Claude Code's shell; commands use `JAVA_HOME` = `C:\Program Files\Java\jdk-21.0.12.1`. Restart Claude Code to pick it up.
 - A stray duplicate `data/raw/fac03129d536eaa266a41c6b21829289.zip` (1992 again) can be deleted by the user.

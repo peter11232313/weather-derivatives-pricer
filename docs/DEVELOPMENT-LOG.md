@@ -189,6 +189,8 @@ Contents
 | 5f.8 | Code review BLOCKER: `"type": 1` was read as the enum index and priced a PUT with 200. Also `"city": true` → 404, no `Allow` header on 405, out-of-range numbers not naming the field, IAE → 400 everywhere. | Red tests first (owner OK), then `FAIL_ON_NUMBERS_FOR_ENUMS` and enum/text coercion off, headers copied, field named, library argument errors wrapped as 400 only around the contract and analysis calls; 406 `not_acceptable`; Boot `/error` never includes internals. |
 | 5f.9 | Quant review: no blockers. The detrended burn is computed twice (once inside `runDetrended`). | Kept: both runs are deterministic and identical; README explains that prices are undiscounted, which uncertainties are excluded, and how to avoid look-ahead. |
 | 5f.10 | The test HTML report crashed on a stale `pricer/build` folder in the working tree. | `./gradlew clean`; a clean build passes. |
+| 5f.11 | Re-review after the reviewers were upgraded (2026-11-24): spec 006 was already merged, so `main...HEAD` was empty. | Reviewers given the spec path and the range `b66bd3c^1..b66bd3c^2` explicitly. code, quant and met all `VERDICT: PASS`; no fixes needed. Findings recorded as open questions in PROGRESS.md. |
+| 5f.12 | Three reviewers ran `./gradlew test` at once in `pricer/`; two crashed in Gradle's test-results I/O (`EOFException`, `NoSuchFileException in-progress-results-generic.bin`), not in tests. | A shared `build/` dir can't take concurrent test runs. A solo `./gradlew test --rerun` passed (368/0/0/0). Run the suite once yourself before parallel reviews, or tell reviewers not to run Gradle concurrently. |
 
 ## 6. Workflow lessons
 
