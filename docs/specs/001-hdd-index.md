@@ -165,3 +165,8 @@ Owner OK 2026-11-24: form-only check (catches old/unpublished files; per-city ch
 Java station registry, later); fixture default 0 / 0 so no existing assertion changes;
 `DailyTemps` wording fixed here, AGENTS.md "Dates are LocalDate in UTC" kept, `era5-data`
 skill day definition fixed separately.
+Planner findings (owner OK 2026-11-24): `ParquetFixtures.writeQuery` also defaults to 0 / 0
+metadata (7 loader tests use it; no assertion changes); `HddIndex` and `DailyTemp` Javadoc
+reworded alongside `DailyTemps`; Java accepts exactly Python's set via `0|-?[1-9][0-9]?`;
+order: tmax key (missing, form, range), then tmin, then gap; the value in an error message
+is quoted and cut to 40 characters.
