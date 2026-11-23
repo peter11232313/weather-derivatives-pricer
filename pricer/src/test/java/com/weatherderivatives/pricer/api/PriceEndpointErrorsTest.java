@@ -330,6 +330,19 @@ class PriceEndpointErrorsTest {
     assertContains(assertError(send(workedExampleRequest("notmin")), 422, "data_error"), "tmin_c");
   }
 
+  @Test
+  void amendmentB_fileWithoutWindowMetadata_422DataErrorNamingMissingKey() throws Exception {
+    // Same rows as the pricing "london" file, but no key-value metadata (an old 00-24 UTC file).
+    List<ParquetFixtures.Row> rows = new ArrayList<>();
+    for (DailyTemp d : ApiTestSupport.workedExampleDays()) {
+      rows.add(new ParquetFixtures.Row(d.date(), d.tmaxC(), d.tminC()));
+    }
+    ParquetFixtures.writeTemps(dataDir().resolve("nowindow.parquet"), rows, Map.of());
+
+    String message = assertError(send(workedExampleRequest("nowindow")), 422, "data_error");
+    assertContains(message, ParquetFixtures.TMAX_WINDOW_KEY);
+  }
+
   // ---------------------------------------------------------------------------------------------
   // AC7b: Spring's own 404 / 405 / 415 keep their status, with the JSON error body
   // ---------------------------------------------------------------------------------------------
