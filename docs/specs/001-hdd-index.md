@@ -161,7 +161,7 @@ Out:
 - [x] `load()` Javadoc lists the new failure; `DailyTemps` Javadoc says the date is the settlement day under the station's windows (ADR 0005), not a UTC calendar day; README, CHANGELOG, PROGRESS and the development log updated.
 
 ### Decision
-Owner OK 2026-11-24: form-only check (catches old/unpublished files; per-city check needs a
+Owner OK 2026-11-24: form-only check (catches files without the window metadata, e.g. old 00–24 UTC files; unpublished files that carry valid metadata still load; per-city check needs a
 Java station registry, later); fixture default 0 / 0 so no existing assertion changes;
 `DailyTemps` wording fixed here, AGENTS.md "Dates are LocalDate in UTC" kept, `era5-data`
 skill day definition fixed separately.
@@ -170,3 +170,5 @@ metadata (7 loader tests use it; no assertion changes); `HddIndex` and `DailyTem
 reworded alongside `DailyTemps`; Java accepts exactly Python's set via `0|-?[1-9][0-9]?`;
 order: tmax key (missing, form, range), then tmin, then gap; the value in an error message
 is quoted and cut to 40 characters.
+Wording corrected 2026-11-24 (owner OK, met-reviewer QUESTION on PR #16): the check catches
+files *without* window metadata, not every unpublished file.
