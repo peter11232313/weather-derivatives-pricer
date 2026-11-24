@@ -7,7 +7,8 @@ import java.util.Objects;
  * Heating Degree Day (HDD) index calculations (spec 001).
  *
  * <p>Daily mean {@code T = (tmaxC + tminC) / 2}; daily {@code HDD = max(0, baseC − T)}. The
- * cumulative index sums daily HDD over an inclusive range of UTC calendar days.
+ * cumulative index sums daily HDD over an inclusive range of settlement days (each day D under the
+ * station's observation windows, ADR 0005).
  */
 public final class HddIndex {
 
@@ -58,8 +59,8 @@ public final class HddIndex {
    * Sums daily HDD over {@code start..endInclusive}, both ends included.
    *
    * @param temps the city's daily temperatures
-   * @param start first accrual day (UTC)
-   * @param endInclusive last accrual day (UTC), included
+   * @param start first accrual day (settlement day)
+   * @param endInclusive last accrual day (settlement day), included
    * @param baseC base temperature in °C
    * @return cumulative HDD in °C·day, unrounded
    * @throws IllegalArgumentException if {@code baseC} is non-finite or {@code start} is after
@@ -88,8 +89,8 @@ public final class HddIndex {
    * Sums daily HDD over {@code start..endInclusive} with the default 18 °C base.
    *
    * @param temps the city's daily temperatures
-   * @param start first accrual day (UTC)
-   * @param endInclusive last accrual day (UTC), included
+   * @param start first accrual day (settlement day)
+   * @param endInclusive last accrual day (settlement day), included
    * @return cumulative HDD in °C·day, unrounded
    * @throws IllegalArgumentException if {@code start} is after {@code endInclusive}
    * @throws TemperatureDataException if a day in the period is missing (the message names it)
