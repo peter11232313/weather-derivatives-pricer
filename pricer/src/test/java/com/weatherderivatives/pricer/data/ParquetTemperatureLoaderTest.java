@@ -201,6 +201,8 @@ class ParquetTemperatureLoaderTest {
     TemperatureDataException ex =
         assertThrows(TemperatureDataException.class, () -> loader.load("zurich"));
     assertMessageContains(ex, cityFile("zurich").toString());
+    // Amendment B: the codec error, not a window-metadata error that also names the path.
+    assertMessageLacks(ex, ParquetFixtures.TMAX_WINDOW_KEY);
   }
 
   @Test

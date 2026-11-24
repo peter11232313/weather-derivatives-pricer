@@ -42,7 +42,7 @@ _Last updated: 2026-11-24_
   - 368 Java tests green; spotless + javadoc clean; 15/15 criteria ticked. Reviewed by `code-reviewer` (blocker: `"type": 1` priced a PUT, fixed test-first) and `quant-reviewer` (no blockers; README notes on reading the numbers).
   - Manual: live server on London 1991–2001 gave the same prices as the library (Jan K400 burn £436.00, normal £456.17; detrended to 2002 £614.60 / £637.95).
   - **Re-reviewed 2026-11-24 with the upgraded reviewers** (VERDICT format, new `met-reviewer`; PR #14): `code-reviewer`, `quant-reviewer` and `met-reviewer` all `VERDICT: PASS`, no blockers, so no fixes. 368 Java tests green (solo `--rerun`), spotless clean. Quant reproduced the London prices above to the cent; met reproduced the spec's worked example (burn £160, normal £225.675833). Non-blocking findings are under Open questions.
-- **Spec 001 amendment B — observation-window metadata check**: branch `feat/001b-window-metadata`, in review.
+- **Spec 001 amendment B — observation-window metadata check**: branch `feat/001b-window-metadata`, ready for PR. Reviewed by `code-reviewer` and `met-reviewer`: both `VERDICT: PASS` in round 1; SHOULDs/NITs fixed (DailyTemp wording, ADR 0005 note, zstd test guard).
   - `ParquetTemperatureLoader` requires `tmax_window_start_utc_h` / `tmin_window_start_utc_h` (same rules as `publish`), after the column checks, before rows; else `TemperatureDataException` (API 422). Form only, not per city. Fixtures write 0 / 0 by default (`writeTemps`, `writeQuery`). `DailyTemp`/`DailyTemps`/`HddIndex` Javadoc: settlement days (ADR 0005).
   - 409 Java tests green (41 new); spotless + javadoc clean; 12/12 criteria ticked.
   - Manual: real `data/pricer/london.parquet` (9 / −15) loads, 4,016 rows, 1991-01-02..2001-12-30.

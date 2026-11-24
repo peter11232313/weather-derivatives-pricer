@@ -69,8 +69,9 @@ D−1 09:00..D 09:00 (08:50 rounded to 09:00). 0 / 0 is the UTC day (KNMI, DWD).
 - Compared with the old 00–00 day, London monthly HDD is about 4 HDD lower on average
   (1991–1994: mean −3.9, sd 2.8, worst −9.2): a 00–24 Tmin window catches parts of two
   nights. Files built before amendment B lack the window metadata, fail `publish` and the
-  Java loader (spec 001 amendment B), and must be reprocessed (`data/processed/london.parquet`) and republished (`data/pricer/`); never
-  mix them with new ones: burn results on the old files are not comparable.
+  Java loader (spec 001 amendment B), and must be reprocessed
+  (`data/processed/london.parquet`) and republished (`data/pricer/`); never mix them with
+  new ones: burn results on the old files are not comparable.
 
 **One-time setup for downloads**
 1. Create a free account at the Copernicus Climate Data Store and accept the ERA5
