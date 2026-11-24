@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -29,6 +30,14 @@ import java.util.regex.Pattern;
  * #MAX_TEMP_C} °C (inclusive) are rejected. This catches corrupt files and kelvin or doubly
  * converted values, but it is not a general units check: a winter-only Fahrenheit file can stay
  * inside the limits.
+ *
+ * <p>The file must also carry the ADR 0005 observation-window metadata ({@value #TMAX_WINDOW_KEY},
+ * {@value #TMIN_WINDOW_KEY}) that {@code publish} writes, so a file built on another day definition
+ * (e.g. the old 00–24 UTC day) is rejected rather than priced. Only the form of the windows is
+ * checked, not that they are the right ones for the city.
+ *
+ * <p>Checks run in this order: required columns and their types, then the window metadata, then
+ * each row.
  *
  * <p>When a row breaks several rules, the first in this order is reported: a non-finite value (left
  * to {@link DailyTemp}), then {@code tmax_c} out of range, then {@code tmin_c} out of range, then
@@ -45,6 +54,24 @@ public final class ParquetTemperatureLoader {
 
   /** Highest physically plausible daily temperature, °C (world record 56.7 °C). */
   static final double MAX_TEMP_C = 60.0;
+
+  /** File metadata key: Tmax(D) window start, whole hours relative to D 00:00 UTC (ADR 0005). */
+  static final String TMAX_WINDOW_KEY = "tmax_window_start_utc_h";
+
+  /** File metadata key: Tmin(D) window start, whole hours relative to D 00:00 UTC (ADR 0005). */
+  static final String TMIN_WINDOW_KEY = "tmin_window_start_utc_h";
+
+  /** Largest allowed |window start|, hours (Python {@code registry.MAX_WINDOW_START_H}). */
+  static final int MAX_WINDOW_START_H = 23;
+
+  /** Largest allowed gap between the two window starts, hours ({@code MAX_WINDOW_GAP_H}). */
+  static final int MAX_WINDOW_GAP_H = 24;
+
+  /** Longest metadata value echoed in an error message, in characters. */
+  static final int MAX_QUOTED_CHARS = 40;
+
+  /** Canonical integer, ASCII digits, at most two: same set as Python's publish rule. */
+  private static final Pattern WINDOW_HOURS = Pattern.compile("0|-?[1-9][0-9]?");
 
   private static final Pattern CITY_NAME = Pattern.compile("[a-z0-9_-]+");
 
@@ -68,10 +95,12 @@ public final class ParquetTemperatureLoader {
    * @throws IllegalArgumentException if {@code city} does not match {@code [a-z0-9_-]+}
    * @throws CityFileNotFoundException if the file is missing (names the path)
    * @throws TemperatureDataException if a required column is missing or has the wrong type (names
-   *     the column), a cell is null (names the date and column), a finite value lies outside
-   *     {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names the date, column, value and file;
-   *     checked before {@code tminC > tmaxC}), a date repeats or a row's values are invalid (names
-   *     the date)
+   *     the column), a window metadata key is missing, not a canonical integer in −23..23 or the
+   *     two are more than 24 h apart (names the key, the value cut to 40 characters, and the file;
+   *     checked after the columns, before any row), a cell is null (names the date and column), a
+   *     finite value lies outside {@value #MIN_TEMP_C}..{@value #MAX_TEMP_C} °C (names the date,
+   *     column, value and file; checked before {@code tminC > tmaxC}), a date repeats or a row's
+   *     values are invalid (names the date)
    */
   public DailyTemps load(String city) {
     if (city == null || !CITY_NAME.matcher(city).matches()) {
@@ -86,6 +115,7 @@ public final class ParquetTemperatureLoader {
       requireDateColumn(schema, file);
       boolean tmaxIsFloat = requireTemperatureColumn(schema, TMAX_COLUMN, file);
       boolean tminIsFloat = requireTemperatureColumn(schema, TMIN_COLUMN, file);
+      requireObservationWindows(reader.getFileMetaData().keyValueMetadata(), file);
       return DailyTemps.of(readRows(reader, tmaxIsFloat, tminIsFloat, file));
     } catch (TemperatureDataException e) {
       throw e;
@@ -147,6 +177,66 @@ public final class ParquetTemperatureLoader {
               + " in "
               + file);
     }
+  }
+
+  /**
+   * Checks the ADR 0005 observation-window metadata with the same rules as {@code publish} ({@code
+   * data-prep/src/dataprep/publish.py}): both keys present, each a canonical integer in −{@value
+   * #MAX_WINDOW_START_H}..{@value #MAX_WINDOW_START_H}, at most {@value #MAX_WINDOW_GAP_H} h apart.
+   * The Tmax key is checked fully before the Tmin key.
+   */
+  private static void requireObservationWindows(Map<String, String> metadata, Path file) {
+    int tmaxH = requireWindowStart(metadata, TMAX_WINDOW_KEY, file);
+    int tminH = requireWindowStart(metadata, TMIN_WINDOW_KEY, file);
+    if (Math.abs(tmaxH - tminH) > MAX_WINDOW_GAP_H) {
+      throw new TemperatureDataException(
+          "metadata "
+              + TMAX_WINDOW_KEY
+              + "="
+              + tmaxH
+              + " and "
+              + TMIN_WINDOW_KEY
+              + "="
+              + tminH
+              + " are more than "
+              + MAX_WINDOW_GAP_H
+              + " h apart in "
+              + file);
+    }
+  }
+
+  private static int requireWindowStart(Map<String, String> metadata, String key, Path file) {
+    String value = metadata == null ? null : metadata.get(key);
+    if (value == null) {
+      throw new TemperatureDataException(
+          "missing metadata "
+              + key
+              + " (observation windows, ADR 0005; republish the file) in "
+              + file);
+    }
+    if (!WINDOW_HOURS.matcher(value).matches()
+        || Math.abs(Integer.parseInt(value)) > MAX_WINDOW_START_H) {
+      throw new TemperatureDataException(
+          "metadata "
+              + key
+              + " "
+              + quoteForMessage(value)
+              + " is not a whole number of hours in -"
+              + MAX_WINDOW_START_H
+              + ".."
+              + MAX_WINDOW_START_H
+              + " in "
+              + file);
+    }
+    return Integer.parseInt(value);
+  }
+
+  /** Quotes a metadata value for an error message, cut to {@value #MAX_QUOTED_CHARS} chars. */
+  private static String quoteForMessage(String value) {
+    if (value.codePointCount(0, value.length()) <= MAX_QUOTED_CHARS) {
+      return "'" + value + "'";
+    }
+    return "'" + value.substring(0, value.offsetByCodePoints(0, MAX_QUOTED_CHARS)) + "'...";
   }
 
   private static void requireDateColumn(FileSchema schema, Path file) {

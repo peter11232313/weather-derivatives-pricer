@@ -14,6 +14,13 @@
   with or without a cap. In-house normal CDF (Cody erfc); no new dependency.
 
 ### Changed
+- pricer (spec 001 amendment B, ADR 0005): `ParquetTemperatureLoader` requires the file
+  metadata `tmax_window_start_utc_h` / `tmin_window_start_utc_h` (canonical integers in
+  −23..23, at most 24 h apart; same rules as `publish`). A file without them, e.g. built on
+  the old 00–24 UTC day, used to load and price London about 4 HDD/month too high; it is now
+  a `TemperatureDataException` (API 422) naming the key, the value (cut to 40 characters)
+  and the file. `DailyTemp`/`DailyTemps`/`HddIndex` Javadoc: dates are settlement days
+  under the station's observation windows, not UTC calendar days.
 - pricer (spec 001 amendment A): `ParquetTemperatureLoader` rejects finite `tmax_c` /
   `tmin_c` outside −90..60 °C (inclusive), naming the date, column, value and file. A file
   left in kelvin used to load and give a silent HDD index of 0. Non-finite values keep

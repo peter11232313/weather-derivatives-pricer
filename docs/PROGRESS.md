@@ -42,6 +42,10 @@ _Last updated: 2026-11-24_
   - 368 Java tests green; spotless + javadoc clean; 15/15 criteria ticked. Reviewed by `code-reviewer` (blocker: `"type": 1` priced a PUT, fixed test-first) and `quant-reviewer` (no blockers; README notes on reading the numbers).
   - Manual: live server on London 1991–2001 gave the same prices as the library (Jan K400 burn £436.00, normal £456.17; detrended to 2002 £614.60 / £637.95).
   - **Re-reviewed 2026-11-24 with the upgraded reviewers** (VERDICT format, new `met-reviewer`; PR #14): `code-reviewer`, `quant-reviewer` and `met-reviewer` all `VERDICT: PASS`, no blockers, so no fixes. 368 Java tests green (solo `--rerun`), spotless clean. Quant reproduced the London prices above to the cent; met reproduced the spec's worked example (burn £160, normal £225.675833). Non-blocking findings are under Open questions.
+- **Spec 001 amendment B — observation-window metadata check**: branch `feat/001b-window-metadata`, ready for PR. Reviewed by `code-reviewer` and `met-reviewer`: both `VERDICT: PASS` in round 1; SHOULDs/NITs fixed (DailyTemp wording, ADR 0005 note, zstd test guard).
+  - `ParquetTemperatureLoader` requires `tmax_window_start_utc_h` / `tmin_window_start_utc_h` (same rules as `publish`), after the column checks, before rows; else `TemperatureDataException` (API 422). Form only, not per city. Fixtures write 0 / 0 by default (`writeTemps`, `writeQuery`). `DailyTemp`/`DailyTemps`/`HddIndex` Javadoc: settlement days (ADR 0005).
+  - 409 Java tests green (41 new); spotless + javadoc clean; 12/12 criteria ticked.
+  - Manual: real `data/pricer/london.parquet` (9 / −15) loads, 4,016 rows, 1991-01-02..2001-12-30.
 - **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.
 
 ## Next
@@ -61,8 +65,9 @@ _Last updated: 2026-11-24_
 - Detrending (quant review of spec 004): fit the trend on a longer/wider series than the contract months; a uniform shift moves only the mean, not the cold tail; guard far-future targets.
 
 **Spec 006 re-review findings (2026-11-24, non-blocking; owner to decide)**
-- met SHOULD: the Java loader ignores the ADR 0005 window metadata, so an old 00–24 UTC file under a custom `pricer.data-dir` is priced silently (~4 HDD/month bias). Read the metadata and fail with 422 if missing?
-- met SHOULD: `DailyTemps` Javadoc and AGENTS.md say "UTC calendar day"; under ADR 0005 the key is the settlement day per station windows. The `era5-data` skill still describes the old 01:00..00:00 day.
+- ~~met SHOULD: loader ignores the window metadata~~ → spec 001 amendment B (also fixed the `DailyTemp`/`DailyTemps`/`HddIndex` "UTC calendar day" Javadoc).
+- met SHOULD (rest): the `era5-data` skill still describes the old 01:00..00:00 day; AGENTS.md "Dates are LocalDate in UTC" kept by owner decision.
+- Loader checks only the form of the windows; a valid-but-wrong-city file loads (needs a Java station registry).
 - quant SHOULD: responses are labelled GBP for any city with a file; non-London contracts settle in €. Restrict to London or add a currency from the station registry.
 - quant SHOULD: normal price has no fit diagnostics (n, skewness); shoulder months may be skewed.
 - Both: `targetSeasonYear <= lastSeasonYear` is accepted silently (look-ahead); reject or flag? Quant: rename `priceGbp` → `expectedPayoffGbp`; flag detrended prices when |b|/SE(b) < 2. Met: should the response show the last ERA5-final (non-ERA5T) date?

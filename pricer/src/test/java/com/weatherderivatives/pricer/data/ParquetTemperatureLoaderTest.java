@@ -11,7 +11,9 @@ import com.weatherderivatives.pricer.index.DailyTemps;
 import com.weatherderivatives.pricer.index.TemperatureDataException;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -199,6 +201,8 @@ class ParquetTemperatureLoaderTest {
     TemperatureDataException ex =
         assertThrows(TemperatureDataException.class, () -> loader.load("zurich"));
     assertMessageContains(ex, cityFile("zurich").toString());
+    // Amendment B: the codec error, not a window-metadata error that also names the path.
+    assertMessageLacks(ex, ParquetFixtures.TMAX_WINDOW_KEY);
   }
 
   @Test
@@ -529,5 +533,218 @@ class ParquetTemperatureLoaderTest {
     assertTrue(
         ex.getMessage().startsWith("tmax_c="),
         () -> "expected the Tmax error first but was: " + ex.getMessage());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Spec 001 Amendment B: observation-window metadata check (form only, same rules as publish).
+  // Keys tmax_window_start_utc_h / tmin_window_start_utc_h: canonical integer 0|-?[1-9][0-9]?,
+  // each in -23..23, |tmax - tmin| <= 24. Order: tmax (missing, form, range), tmin, then gap.
+  // ---------------------------------------------------------------------------------------------
+
+  private static final String TMAX_KEY = ParquetFixtures.TMAX_WINDOW_KEY;
+  private static final String TMIN_KEY = ParquetFixtures.TMIN_WINDOW_KEY;
+
+  private static final List<Row> WINDOW_ROWS =
+      List.of(
+          new Row(LocalDate.of(2024, 2, 29), 12.345678901234567, -3.1),
+          new Row(LocalDate.of(2023, 12, 31), 0.1, -0.30000000000000004),
+          new Row(LocalDate.of(2024, 1, 1), -1.0E-12, -40.25));
+
+  private static Map<String, String> windows(String tmaxH, String tminH) {
+    return Map.of(TMAX_KEY, tmaxH, TMIN_KEY, tminH);
+  }
+
+  private void writeWindows(String city, Map<String, String> kvMetadata) {
+    ParquetFixtures.writeTemps(cityFile(city), WINDOW_ROWS, kvMetadata);
+  }
+
+  /** The spec quotes the value; either quote style is accepted (the spec does not fix one). */
+  private static void assertMessageQuotesValue(Throwable ex, String value) {
+    String msg = ex.getMessage();
+    assertTrue(
+        msg != null && (msg.contains("'" + value + "'") || msg.contains("\"" + value + "\"")),
+        () -> "expected message to quote the value [" + value + "] but was: " + msg);
+  }
+
+  private static void assertLoadsWindowRows(DailyTemps temps) {
+    assertEquals(WINDOW_ROWS.size(), temps.size());
+    for (Row r : WINDOW_ROWS) {
+      assertEquals(new DailyTemp(r.date(), r.tmaxC(), r.tminC()), temps.get(r.date()));
+    }
+  }
+
+  @Test
+  void amendmentB_london9AndMinus15_loadsSameRowsAsDefaultZeroZero() {
+    // London: Tmax window D 09:00..D+1 09:00 (9), Tmin window D-1 09:00..D 09:00 (-15).
+    writeWindows("london", windows("9", "-15"));
+    ParquetFixtures.writeTemps(cityFile("default"), WINDOW_ROWS); // fixture default 0 / 0
+
+    ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
+    DailyTemps london = loader.load("london");
+    DailyTemps dflt = loader.load("default");
+
+    assertLoadsWindowRows(london);
+    assertLoadsWindowRows(dflt);
+    for (Row r : WINDOW_ROWS) {
+      assertEquals(dflt.get(r.date()), london.get(r.date()));
+    }
+  }
+
+  @Test
+  void amendmentB_zeroZero_loads() {
+    writeWindows("utcday", windows("0", "0"));
+    assertLoadsWindowRows(new ParquetTemperatureLoader(processedDir).load("utcday"));
+  }
+
+  @Test
+  void amendmentB_noKeyValueMetadataAtAll_rejectedNamingTmaxKeyAndFile() {
+    writeWindows("oldfile", Map.of());
+    assertTrue(ParquetFixtures.kvMetadataOf(cityFile("oldfile")).isEmpty());
+
+    TemperatureDataException ex = loadExpectingFailure("oldfile");
+
+    assertMessageContains(ex, TMAX_KEY); // tmax is checked first
+    assertMessageContains(ex, "missing");
+    assertMessageContains(ex, cityFile("oldfile").toString());
+    assertFalse(ex instanceof CityFileNotFoundException, () -> "was: " + ex);
+  }
+
+  @Test
+  void amendmentB_onlyTmaxKeyPresent_rejectedNamingTminKey() {
+    writeWindows("halfmeta", Map.of(TMAX_KEY, "9"));
+
+    TemperatureDataException ex = loadExpectingFailure("halfmeta");
+
+    assertMessageContains(ex, TMIN_KEY);
+    assertMessageContains(ex, "missing");
+    assertMessageContains(ex, cityFile("halfmeta").toString());
+  }
+
+  @ParameterizedTest(name = "[{index}] tmax=[{0}]")
+  @ValueSource(strings = {"+9", "09", "9.0", " 9", "-0", "abc", "", "9 "})
+  void amendmentB_nonCanonicalTmaxValue_rejectedNamingKeyAndValue(String bad) {
+    // tmin 0 is valid, so the tmax form is the only fault.
+    writeWindows("badtmax", windows(bad, "0"));
+
+    TemperatureDataException ex = loadExpectingFailure("badtmax");
+
+    assertMessageContains(ex, TMAX_KEY);
+    assertMessageQuotesValue(ex, bad);
+    assertMessageContains(ex, cityFile("badtmax").toString());
+  }
+
+  @ParameterizedTest(name = "[{index}] tmin=[{0}]")
+  @ValueSource(strings = {"-015", "+9", "-0", " -15", ""})
+  void amendmentB_nonCanonicalTminValue_rejectedNamingKeyAndValue(String bad) {
+    writeWindows("badtmin", windows("0", bad));
+
+    TemperatureDataException ex = loadExpectingFailure("badtmin");
+
+    assertMessageContains(ex, TMIN_KEY);
+    assertMessageQuotesValue(ex, bad);
+  }
+
+  @ParameterizedTest(name = "[{index}] tmax={0} tmin={1}")
+  @CsvSource({"23, 0", "-23, 0", "0, 23", "0, -23"})
+  void amendmentB_valuesAtPlusMinus23_load(String tmaxH, String tminH) {
+    // Limits are inclusive; the other key is 0 so the gap is 23 h, within 24.
+    writeWindows("edge", windows(tmaxH, tminH));
+    assertLoadsWindowRows(new ParquetTemperatureLoader(processedDir).load("edge"));
+  }
+
+  @ParameterizedTest(name = "[{index}] {0}={1}")
+  @CsvSource({
+    "tmax_window_start_utc_h, 24",
+    "tmax_window_start_utc_h, -24",
+    "tmin_window_start_utc_h, 24",
+    "tmin_window_start_utc_h, -24"
+  })
+  void amendmentB_valuesAtPlusMinus24_rejectedNamingKeyAndValue(String key, String value) {
+    // The other key is 0, so the gap is exactly 24 h (allowed): only the range is at fault.
+    Map<String, String> kv = new HashMap<>(windows("0", "0"));
+    kv.put(key, value);
+    writeWindows("outofrange", kv);
+
+    TemperatureDataException ex = loadExpectingFailure("outofrange");
+
+    assertMessageContains(ex, key);
+    assertMessageQuotesValue(ex, value);
+  }
+
+  @ParameterizedTest(name = "[{index}] tmax={0} tmin={1}")
+  @CsvSource({"9, -15", "-15, 9", "23, -1", "12, -12"})
+  void amendmentB_windowsExactly24hApart_load(String tmaxH, String tminH) {
+    // |9 - (-15)| = 24, |23 - (-1)| = 24, |12 - (-12)| = 24: touching windows are allowed.
+    writeWindows("touch", windows(tmaxH, tminH));
+    assertLoadsWindowRows(new ParquetTemperatureLoader(processedDir).load("touch"));
+  }
+
+  @ParameterizedTest(name = "[{index}] tmax={0} tmin={1}")
+  @CsvSource({"10, -15", "-15, 10", "23, -2"})
+  void amendmentB_windows25hApart_rejectedNamingBothKeys(String tmaxH, String tminH) {
+    // |10 - (-15)| = 25 > 24; each value alone is in range and canonical.
+    writeWindows("gap", windows(tmaxH, tminH));
+
+    TemperatureDataException ex = loadExpectingFailure("gap");
+
+    assertMessageContains(ex, TMAX_KEY);
+    assertMessageContains(ex, TMIN_KEY);
+    assertMessageContains(ex, cityFile("gap").toString());
+  }
+
+  @Test
+  void amendmentB_wrongColumnTypeAndNoMetadata_columnErrorReportedFirst() {
+    ParquetFixtures.writeQuery(
+        cityFile("intnometa"),
+        "SELECT CAST('2024-01-01' AS DATE) AS date, CAST(10 AS INTEGER) AS tmax_c,"
+            + " CAST(2.0 AS DOUBLE) AS tmin_c",
+        Map.of());
+
+    TemperatureDataException ex = loadExpectingFailure("intnometa");
+
+    assertMessageContains(ex, "tmax_c");
+    assertMessageLacks(ex, TMAX_KEY);
+    assertMessageLacks(ex, TMIN_KEY);
+  }
+
+  @Test
+  void amendmentB_longJunkValue_quotedAndCutTo40Characters() {
+    // 100 chars "abcdefghij" x 10; the message may show at most the first 40 of them.
+    String junk = "abcdefghij".repeat(10);
+    String first40 = junk.substring(0, 40);
+    String first41 = junk.substring(0, 41);
+    writeWindows("junk", windows(junk, "0"));
+
+    TemperatureDataException ex = loadExpectingFailure("junk");
+
+    assertMessageContains(ex, TMAX_KEY);
+    assertMessageContains(ex, first40);
+    assertTrue(
+        ex.getMessage().contains("'" + first40) || ex.getMessage().contains("\"" + first40),
+        () -> "expected the cut value to be quoted but was: " + ex.getMessage());
+    assertMessageLacks(ex, junk);
+    assertMessageLacks(ex, first41);
+  }
+
+  @Test
+  void amendmentB_missingTmaxKeyAndBadTminValue_tmaxErrorReported() {
+    writeWindows("order1", Map.of(TMIN_KEY, "abc"));
+
+    TemperatureDataException ex = loadExpectingFailure("order1");
+
+    assertMessageContains(ex, TMAX_KEY);
+    assertMessageContains(ex, "missing");
+    assertMessageLacks(ex, TMIN_KEY);
+  }
+
+  @Test
+  void amendmentB_tmaxOutOfRangeAndTminMissing_tmaxErrorReported() {
+    writeWindows("order2", Map.of(TMAX_KEY, "24"));
+
+    TemperatureDataException ex = loadExpectingFailure("order2");
+
+    assertMessageContains(ex, TMAX_KEY);
+    assertMessageQuotesValue(ex, "24");
+    assertMessageLacks(ex, TMIN_KEY);
   }
 }

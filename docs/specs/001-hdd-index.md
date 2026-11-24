@@ -117,3 +117,56 @@ Check in the loader only, not in `DailyTemp` (spec 002 decision 3; owner OK 2026
 Planner findings (owner OK 2026-11-20): a plain `v < MIN || v > MAX` would give ±∞ the range
 error, so only finite values are range-checked; the order criterion uses a kelvin `tmin_c`,
 since a kelvin `tmax_c` never triggers `tminC > tmaxC`.
+
+## Amendment B — observation-window metadata check (approved 2026-11-24)
+
+### Why
+Since ADR 0005 a file's `date` is the settlement day D under the station's Tmax/Tmin
+observation windows, recorded in the file metadata. `publish` checks it; the Java loader
+does not. Since spec 006 `pricer.data-dir` can point at any folder, so an old 00–24 UTC
+file or an unpublished one is priced silently: London HDD about 4 too high per month
+(1991–94: mean +3.94, worst +9.21), a systematic bias. Raised as a SHOULD in the
+met-reviewer re-review of spec 006 (2026-11-24).
+
+### Scope
+In:
+- `ParquetTemperatureLoader` requires file metadata keys `tmax_window_start_utc_h` and
+  `tmin_window_start_utc_h`, with the same rules as `publish`: each a canonical integer
+  string (`9`, `-15` OK; `+9`, `09`, `9.0`, ` 9`, `-0` rejected), each in −23..23, and the
+  two at most 24 h apart.
+- Failure is a `TemperatureDataException` naming the key, the value (or "missing") and the
+  file; the API already maps it to 422.
+- Order: after the column/schema checks, before any row is read.
+- Fixtures: `ParquetFixtures.writeTemps` writes valid metadata by default (0 / 0, i.e.
+  ADR 0002's 00–24 UTC day); an overload writes custom metadata or none.
+
+Out:
+- Checking the windows match the city's expected values (no station registry in Java):
+  a valid-but-wrong-city file still loads.
+- Exposing the windows on `DailyTemps` or in the API response.
+- Other metadata keys (`source`, `method`, `start`/`end`); any Python change.
+
+### Acceptance criteria
+- [x] Given metadata 9 / −15 (London), when loaded, then it loads with the same rows as before.
+- [x] Given metadata 0 / 0, then it loads.
+- [x] Given no key-value metadata at all, then rejected; the error names `tmax_window_start_utc_h` and the file path.
+- [x] Given only `tmax_window_start_utc_h`, then rejected naming `tmin_window_start_utc_h`.
+- [x] Given `+9`, `09`, `9.0`, ` 9`, `-0` or `abc`, then each is rejected naming the key and the value.
+- [x] Given 23 and −23, then it loads; given 24 or −24, then rejected.
+- [x] Given 9 / −15 (24 h apart), then it loads; given 10 / −15 (25 h apart), then rejected naming both keys.
+- [x] Given a wrong column type and no metadata, then the column error is reported (schema checked first).
+- [x] Given `POST /price` for a city whose file lacks window metadata, then 422 naming the missing key.
+- [x] The real `data/pricer/london.parquet` still loads (manual check, recorded in PROGRESS).
+- [x] All existing Java tests green with the fixture default; no existing assertion changed.
+- [x] `load()` Javadoc lists the new failure; `DailyTemps` Javadoc says the date is the settlement day under the station's windows (ADR 0005), not a UTC calendar day; README, CHANGELOG, PROGRESS and the development log updated.
+
+### Decision
+Owner OK 2026-11-24: form-only check (catches old/unpublished files; per-city check needs a
+Java station registry, later); fixture default 0 / 0 so no existing assertion changes;
+`DailyTemps` wording fixed here, AGENTS.md "Dates are LocalDate in UTC" kept, `era5-data`
+skill day definition fixed separately.
+Planner findings (owner OK 2026-11-24): `ParquetFixtures.writeQuery` also defaults to 0 / 0
+metadata (7 loader tests use it; no assertion changes); `HddIndex` and `DailyTemp` Javadoc
+reworded alongside `DailyTemps`; Java accepts exactly Python's set via `0|-?[1-9][0-9]?`;
+order: tmax key (missing, form, range), then tmin, then gap; the value in an error message
+is quoted and cut to 40 characters.

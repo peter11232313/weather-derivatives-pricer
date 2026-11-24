@@ -4,12 +4,14 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 /**
- * One city's observed daily maximum and minimum temperature for a single UTC calendar day.
+ * One city's observed daily maximum and minimum temperature for a single settlement day: day D
+ * under the station's Tmax/Tmin observation windows, which are defined in UTC (ADR 0005); not
+ * necessarily the UTC calendar day (it is for 0 / 0 windows, e.g. Amsterdam, Essen).
  *
  * <p>Construction rejects non-finite values (NaN, ±∞) and {@code tminC > tmaxC}, naming the date in
  * the error.
  *
- * @param date UTC calendar day
+ * @param date settlement day D under the station's observation windows (ADR 0005)
  * @param tmaxC daily maximum temperature in °C
  * @param tminC daily minimum temperature in °C
  */

@@ -48,7 +48,9 @@ Contracts settle on each station's own observation windows, all in UTC:
   under 00–24 (1991–1994: mean −3.94, sd 2.79, worst −9.21), because a 00–24 Tmin window
   catches parts of two nights. Burn and detrended-burn results must be recomputed; old
   UTC-day files must not be mixed with new ones (they lack the window metadata and fail
-  `publish`; the Java loader does not check the metadata).
+  `publish`; the Java loader does not check the metadata). *Update 2026-11-24: since spec
+  001 amendment B the Java loader also requires the window metadata and checks its form
+  (not the per-city values).*
 - A settlement month reaches past the calendar month (London January: 31 Dec 09:00 ..
   1 Feb 09:00 UTC); comparisons with calendar-month data will differ at the edges.
 - Edge-day files are never refreshed; delete one to re-fetch it after ERA5T is finalised.

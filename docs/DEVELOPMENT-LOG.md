@@ -192,6 +192,16 @@ Contents
 | 5f.11 | Re-review after the reviewers were upgraded (2026-11-24): spec 006 was already merged, so `main...HEAD` was empty. | Reviewers given the spec path and the range `b66bd3c^1..b66bd3c^2` explicitly. code, quant and met all `VERDICT: PASS`; no fixes needed. Findings recorded as open questions in PROGRESS.md. |
 | 5f.12 | Three reviewers ran `./gradlew test` at once in `pricer/`; two crashed in Gradle's test-results I/O (`EOFException`, `NoSuchFileException in-progress-results-generic.bin`), not in tests. | A shared `build/` dir can't take concurrent test runs. A solo `./gradlew test --rerun` passed (368/0/0/0). Run the suite once yourself before parallel reviews, or tell reviewers not to run Gradle concurrently. |
 
+## 5g. Spec 001 amendment B — observation-window metadata check
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5g.1 | met-reviewer (spec 006 re-review): the loader ignored ADR 0005 window metadata, so an old 00–24 UTC file under a custom `pricer.data-dir` priced ~4 HDD/month too high. | Owner OK: loader requires both keys with `publish`'s rules; form only (no Java station registry); fixture default 0 / 0. |
+| 5g.2 | Planner: `writeQuery` fixtures (7 loader tests) would also break or stop proving anything without metadata. | `writeQuery` defaults to 0 / 0 too (owner OK); no assertion changed. |
+| 5g.3 | Matching Python's canonical-int rule (`-?[0-9]{1,2}` + `str(int(v)) == v`). | Java `0\|-?[1-9][0-9]?` accepts exactly the same set (rejects `+9`, `09`, `-0`, ` 9`). |
+| 5g.4 | DuckDB `parquet_kv_metadata()` returns BLOBs; `CAST(.. AS VARCHAR)` turned `'` into the text `\x27`. | Test reader uses `decode()`; DuckDB 2.0.0.1 `KV_METADATA` writes the values correctly. |
+| 5g.5 | Spec left the quote style and truncation marker open. | Single quotes like Python's `!r`; values over 40 characters cut by code point and marked `'...`. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.

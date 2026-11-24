@@ -6,7 +6,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** An immutable series of daily temperatures for one city, keyed by UTC calendar day. */
+/**
+ * An immutable series of daily temperatures for one city, keyed by settlement day under the
+ * station's observation windows (ADR 0005).
+ */
 public final class DailyTemps {
 
   private final Map<LocalDate, DailyTemp> byDate;
@@ -38,7 +41,7 @@ public final class DailyTemps {
   /**
    * Returns the entry for a day.
    *
-   * @param date UTC calendar day
+   * @param date settlement day D under the station's Tmax/Tmin observation windows (ADR 0005)
    * @return the day's temperatures
    * @throws TemperatureDataException if the series has no entry for {@code date} (the message names
    *     the date)
