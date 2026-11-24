@@ -68,8 +68,8 @@ D−1 09:00..D 09:00 (08:50 rounded to 09:00). 0 / 0 is the UTC day (KNMI, DWD).
   error (corrupt-data guard).
 - Compared with the old 00–00 day, London monthly HDD is about 4 HDD lower on average
   (1991–1994: mean −3.9, sd 2.8, worst −9.2): a 00–24 Tmin window catches parts of two
-  nights. Files built before amendment B lack the window metadata, fail `publish`, and must
-  be reprocessed (`data/processed/london.parquet`) and republished (`data/pricer/`); never
+  nights. Files built before amendment B lack the window metadata, fail `publish` and the
+  Java loader (spec 001 amendment B), and must be reprocessed (`data/processed/london.parquet`) and republished (`data/pricer/`); never
   mix them with new ones: burn results on the old files are not comparable.
 
 **One-time setup for downloads**
@@ -144,6 +144,12 @@ dates, nulls, non-finite values, values outside −90..60 °C (e.g. a file left 
 and `tmin_c > tmax_c` are rejected with an error naming the date, column or path; nothing
 is skipped or interpolated. The range check is a guard against corrupt or wrong-unit
 files, not a units check: a winter-only file in °F can stay inside the limits.
+The file must also carry the observation-window metadata `tmax_window_start_utc_h` and
+`tmin_window_start_utc_h` (ADR 0005; written by `dataprep process`, checked by `publish`):
+each a whole number of hours in −23..23, at most 24 h apart. A file without them, e.g. one
+built on the old 00–24 UTC day, is rejected (422 from the API) instead of priced with about
+4 HDD per London month too many. Only the form is checked, not that the windows are the
+right ones for the city.
 
 ## Burn analysis (spec 003)
 An `HddContract` (call, put or swap; whole calendar months; strike, tick in £ per °C·day,
@@ -200,6 +206,7 @@ A local HTTP server (Spring Boot) prices a contract with every method in one cal
 ```bash
 cd pricer && ./gradlew bootRun          # reads data/pricer/<city>.parquet (from the repo root)
 # other folder: ./gradlew bootRun --args='--pricer.data-dir=/path/to/folder'
+#   (files there must carry the window metadata from `dataprep process`/`publish`)
 
 curl -s http://127.0.0.1:8080/health    # {"status":"ok"}
 

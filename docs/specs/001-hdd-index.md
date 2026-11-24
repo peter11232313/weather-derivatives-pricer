@@ -147,18 +147,18 @@ Out:
 - Other metadata keys (`source`, `method`, `start`/`end`); any Python change.
 
 ### Acceptance criteria
-- [ ] Given metadata 9 / −15 (London), when loaded, then it loads with the same rows as before.
-- [ ] Given metadata 0 / 0, then it loads.
-- [ ] Given no key-value metadata at all, then rejected; the error names `tmax_window_start_utc_h` and the file path.
-- [ ] Given only `tmax_window_start_utc_h`, then rejected naming `tmin_window_start_utc_h`.
-- [ ] Given `+9`, `09`, `9.0`, ` 9`, `-0` or `abc`, then each is rejected naming the key and the value.
-- [ ] Given 23 and −23, then it loads; given 24 or −24, then rejected.
-- [ ] Given 9 / −15 (24 h apart), then it loads; given 10 / −15 (25 h apart), then rejected naming both keys.
-- [ ] Given a wrong column type and no metadata, then the column error is reported (schema checked first).
-- [ ] Given `POST /price` for a city whose file lacks window metadata, then 422 naming the missing key.
-- [ ] The real `data/pricer/london.parquet` still loads (manual check, recorded in PROGRESS).
-- [ ] All existing Java tests green with the fixture default; no existing assertion changed.
-- [ ] `load()` Javadoc lists the new failure; `DailyTemps` Javadoc says the date is the settlement day under the station's windows (ADR 0005), not a UTC calendar day; README, CHANGELOG, PROGRESS and the development log updated.
+- [x] Given metadata 9 / −15 (London), when loaded, then it loads with the same rows as before.
+- [x] Given metadata 0 / 0, then it loads.
+- [x] Given no key-value metadata at all, then rejected; the error names `tmax_window_start_utc_h` and the file path.
+- [x] Given only `tmax_window_start_utc_h`, then rejected naming `tmin_window_start_utc_h`.
+- [x] Given `+9`, `09`, `9.0`, ` 9`, `-0` or `abc`, then each is rejected naming the key and the value.
+- [x] Given 23 and −23, then it loads; given 24 or −24, then rejected.
+- [x] Given 9 / −15 (24 h apart), then it loads; given 10 / −15 (25 h apart), then rejected naming both keys.
+- [x] Given a wrong column type and no metadata, then the column error is reported (schema checked first).
+- [x] Given `POST /price` for a city whose file lacks window metadata, then 422 naming the missing key.
+- [x] The real `data/pricer/london.parquet` still loads (manual check, recorded in PROGRESS).
+- [x] All existing Java tests green with the fixture default; no existing assertion changed.
+- [x] `load()` Javadoc lists the new failure; `DailyTemps` Javadoc says the date is the settlement day under the station's windows (ADR 0005), not a UTC calendar day; README, CHANGELOG, PROGRESS and the development log updated.
 
 ### Decision
 Owner OK 2026-11-24: form-only check (catches old/unpublished files; per-city check needs a
