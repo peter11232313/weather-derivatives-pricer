@@ -176,3 +176,8 @@ Owner OK 2026-11-25: reject (400), not warn: a warning is easy to ignore, and ta
 a target before the window stays allowed; the existing row in
 `PriceEndpointPricingTest.ac2_targetSeasonYear_variousTerms_detrendedEqualsLibrary` with
 seasons 2001–2010 and target 2001 changes its target to 2000 (input only; assertion unchanged).
+Planner findings (owner OK 2026-11-25): guard in `PriceService.price()` after the season
+years are required, before `load()`; order: contract terms → season years present →
+look-ahead → load (404/422) → library (first > last, 5/10-season minimums). With
+`first > last` the window is empty, so the guard is silent and the library's 400 follows
+the load as today. The message suggests `lastSeasonYear + 1` (computed in `long`).
