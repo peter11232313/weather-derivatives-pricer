@@ -227,6 +227,13 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
   slope and its standard error, the shifted seasons (with each season's mean temperature and
   shift) and the detrended burn and normal prices; otherwise `"detrended": null`.
 - **At least 5 seasons** (the normal model's minimum), and **10 with `targetSeasonYear`**.
+- **No look-ahead** (spec 006 amendment A): a `targetSeasonYear` inside
+  `firstSeasonYear..lastSeasonYear` is a 400, checked before the data are read, because the
+  priced season would feed its own trend fit and burn. To detrend to the latest climate use
+  `lastSeasonYear + 1`. Only a target after the window is a walk-forward back-test; a target
+  before it is allowed but is a hindcast (the trend is fitted on later seasons and projected
+  backwards). For long periods (e.g. Oct–Apr or a 12-month contract) the usual trade date for
+  season `last + 1` comes before season `last` has settled; use `lastSeasonYear + 2` then.
 - **Errors** are `{"error", "message"}`: 400 `invalid_request` (the message names the field),
   404 `city_not_found`, 422 `data_error` (names the season and date), 404 / 405 / 406 / 415 for a
   wrong route, method, `Accept` or content type, and 500 `internal_error` with no details.
@@ -237,8 +244,7 @@ How to read the numbers:
 - `burn.stdErrorGbp` covers only the spread of past payoffs. The normal price does not include the
   uncertainty of σ itself (about ±25% with 10 seasons).
 - The detrended standard errors leave out the uncertainty of the fitted slope; check
-  `slopeStdErrDegCPerYear`. For a back-test, choose a `targetSeasonYear` after `lastSeasonYear`
-  to avoid look-ahead.
+  `slopeStdErrDegCPerYear`.
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`

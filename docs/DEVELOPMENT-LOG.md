@@ -202,6 +202,15 @@ Contents
 | 5g.4 | DuckDB `parquet_kv_metadata()` returns BLOBs; `CAST(.. AS VARCHAR)` turned `'` into the text `\x27`. | Test reader uses `decode()`; DuckDB 2.0.0.1 `KV_METADATA` writes the values correctly. |
 | 5g.5 | Spec left the quote style and truncation marker open. | Single quotes like Python's `!r`; values over 40 characters cut by code point and marked `'...`. |
 
+## 5h. Spec 006 amendment A — look-ahead guard
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5h.1 | quant + met (spec 006 re-review): an in-window `targetSeasonYear` let the priced season feed its own trend fit and burn. | Owner OK: reject with 400, not a warning (easy to ignore); target before the window allowed (no leakage); library unchanged (research use). |
+| 5h.2 | Where to check: `first > last` lives in the library, after `load()`. | Guard runs after the season years are required and before `load()`, so an unknown city or < 10 seasons with an in-window target gets the look-ahead 400. With `first > last` the window is empty and the library's 400 follows as before. |
+| 5h.3 | One existing test row (CALL 2001..2010, target 2001) became invalid. | Owner OK: input changed to 2000 (before the window); assertion unchanged. |
+| 5h.4 | `assertMentionsNumber` ignores a number right after `.`, so "2001..2010" would miss 2010. | New test uses a digit-boundary helper; the "e.g. 2011" hint cannot satisfy it. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.

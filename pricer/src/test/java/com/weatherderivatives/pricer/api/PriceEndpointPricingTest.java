@@ -3,6 +3,7 @@ package com.weatherderivatives.pricer.api;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.add400;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.add440;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertBurn;
+import static com.weatherderivatives.pricer.api.ApiTestSupport.assertContains;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertDetrendedSeasons;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertError;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertMentionsNumber;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -208,7 +210,8 @@ class PriceEndpointPricingTest {
         // type, first, last, strike, tick, cap, baseC, decimals, seasons first..last, target
         "PUT,  2000-11, 2001-03, 1900, 15, 4000, null, 1,    2000, 2011, 2013",
         "SWAP, 1990-12, 1991-02, 1300, 10, null, 17.0, null, 2000, 2012, 2014",
-        "CALL, 2005-11, 2006-03, 1700, 20, null, 18.5, 2,    2001, 2010, 2001",
+        // target before the window (spec 006 amendment A: allowed, no look-ahead)
+        "CALL, 2005-11, 2006-03, 1700, 20, null, 18.5, 2,    2001, 2010, 2000",
       })
   void ac2_targetSeasonYear_variousTerms_detrendedEqualsLibrary(
       ContractType type,
@@ -243,6 +246,40 @@ class PriceEndpointPricingTest {
     assertDetrendedSeasons(lib.burn().seasons(), lib.seasons(), d.get("seasons"));
     assertBurn(lib.burn(), d.get("burn"));
     assertNormal(libNormal, d.get("normal"));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Amendment A: look-ahead guard -> a target inside firstSeasonYear..lastSeasonYear is a 400
+  // ---------------------------------------------------------------------------------------------
+
+  @ParameterizedTest(name = "[{index}] target {0} inside 2001..2010")
+  @ValueSource(ints = {2001, 2005, 2010})
+  void amendmentA_targetInsideWindow_400LookAhead(int target) throws Exception {
+    // same request as the AC2 known answer (which prices with target 2011), only the target moves
+    // into the window: first (2001), inside (2005), last (2010)
+    Map<String, Object> req = workedExampleRequest("trend");
+    req.put("strikeHddDegC", 200.0);
+    req.put("tickGbpPerDegC", 1000.0);
+    req.put("firstSeasonYear", 2001);
+    req.put("lastSeasonYear", 2010);
+    req.put("targetSeasonYear", target);
+    String message = assertError(postPrice(mvc, req), 400, "invalid_request");
+    assertContains(message, "targetSeasonYear");
+    assertContains(message, "look-ahead");
+    // the window bounds as whole numbers. Not assertMentionsNumber: its lookbehind rejects a
+    // preceding '.', so it would miss 2010 in a "2001..2010" range. The suggested "e.g. 2011"
+    // cannot satisfy either check (2011 contains neither 2001 nor 2010).
+    assertWholeNumber(message, 2001);
+    assertWholeNumber(message, 2010);
+    // for target 2001 the echoed target alone would satisfy 2001; the literal window proves it
+    assertContains(message, "2001..2010");
+  }
+
+  /** Asserts {@code text} contains {@code number} with no digit directly before or after it. */
+  private static void assertWholeNumber(String text, int number) {
+    assertTrue(
+        Pattern.compile("(?<![0-9])" + number + "(?![0-9])").matcher(text).find(),
+        () -> "expected the number " + number + " in: " + text);
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -137,3 +137,49 @@ gives:
 
 ## Open questions
 None.
+
+## Amendment A — look-ahead guard (approved 2026-11-25)
+
+### Why
+`POST /price` accepts a `targetSeasonYear` inside `firstSeasonYear..lastSeasonYear`; the
+priced season then feeds both the trend fit and the burn. In a back-test that is
+look-ahead: the realised outcome enters its own price. The README only advised against it.
+Raised by quant-reviewer and met-reviewer in the spec 006 re-review (2026-11-24). Decision 3
+already keeps the season range explicit "to keep back-tests free of look-ahead"; this makes
+the API enforce it.
+
+### Scope
+In:
+- `POST /price` rejects `firstSeasonYear ≤ targetSeasonYear ≤ lastSeasonYear` with 400
+  `invalid_request`; the message names `targetSeasonYear`, the window and "look-ahead".
+- Checked with the other request checks, before the data is loaded (so an unknown city or
+  fewer than 10 seasons with an in-window target still gives this 400).
+- A target before the window (`< firstSeasonYear`) stays allowed: no leakage of the priced
+  season's own outcome, but it is a hindcast (trend fitted on later seasons), not a
+  walk-forward back-test (clarified after quant review, 2026-11-25).
+
+Out:
+- The library (`DetrendedBurnAnalysis`, `IndexDistributionAnalysis.runDetrended`) is
+  unchanged; the rule lives in the API only.
+- A far-future target limit; flagging an insignificant trend.
+
+### Acceptance criteria
+- [x] Given seasons 2001–2010 and target 2011, when priced, then 200 with `detrended` (unchanged).
+- [x] Given target 2010 (= last), 2001 (= first) or 2005 (inside), then 400 `invalid_request` naming `targetSeasonYear`, 2001, 2010 and "look-ahead".
+- [x] Given target 2000 (before the window), then 200 with `detrended`.
+- [x] Given an unknown city and an in-window target, then 400, not 404.
+- [x] Given 5 seasons and an in-window target, then the look-ahead 400, not the 10-season 400.
+- [x] Given no `targetSeasonYear`, then behaviour unchanged.
+- [x] All other Java tests green; README (look-ahead paragraph becomes a rule), CHANGELOG, PROGRESS and the development log updated.
+
+### Decision
+Owner OK 2026-11-25: reject (400), not warn: a warning is easy to ignore, and target = last
+("detrend to the latest season") is no longer allowed via the API (use `lastSeasonYear + 1`);
+a target before the window stays allowed; the existing row in
+`PriceEndpointPricingTest.ac2_targetSeasonYear_variousTerms_detrendedEqualsLibrary` with
+seasons 2001–2010 and target 2001 changes its target to 2000 (input only; assertion unchanged).
+Planner findings (owner OK 2026-11-25): guard in `PriceService.price()` after the season
+years are required, before `load()`; order: contract terms → season years present →
+look-ahead → load (404/422) → library (first > last, 5/10-season minimums). With
+`first > last` the window is empty, so the guard is silent and the library's 400 follows
+the load as today. The message suggests `lastSeasonYear + 1` (computed in `long`).
