@@ -8,12 +8,14 @@ import static com.weatherderivatives.pricer.api.ApiTestSupport.postPrice;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.toJson;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.workedExampleRequest;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.writeCity;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.weatherderivatives.pricer.data.ParquetFixtures;
 import com.weatherderivatives.pricer.index.DailyTemp;
+import com.weatherderivatives.pricer.model.DetrendedBurnAnalysis;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -341,6 +343,40 @@ class PriceEndpointErrorsTest {
 
     String message = assertError(send(workedExampleRequest("nowindow")), 422, "data_error");
     assertContains(message, ParquetFixtures.TMAX_WINDOW_KEY);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Amendment A: the look-ahead guard runs with the request checks, before the data is loaded
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void amendmentA_unknownCityWithTargetInsideWindow_400LookAheadNot404() throws Exception {
+    // no paris.parquet: loading first would give 404 city_not_found
+    Map<String, Object> req = workedExampleRequest("paris");
+    req.put("firstSeasonYear", 2001);
+    req.put("lastSeasonYear", 2010);
+    req.put("targetSeasonYear", 2003);
+    assertContains(assertError(send(req), 400, "invalid_request"), "look-ahead");
+  }
+
+  @Test
+  void amendmentA_fiveSeasonsWithTargetInsideWindow_400LookAheadNotTenSeasonMinimum()
+      throws Exception {
+    // london has every day for seasons 2001..2005 (prices without a target, see AC6), so with
+    // target 2003 the only other possible 400 is the detrended 10-season minimum
+    Map<String, Object> req = workedExampleRequest("london");
+    req.put("firstSeasonYear", 2001);
+    req.put("lastSeasonYear", 2005);
+    req.put("targetSeasonYear", 2003);
+    String message = assertError(send(req), 400, "invalid_request");
+    assertContains(message, "look-ahead");
+    // the library's minimum message: "detrended burn analysis (trend fit) needs at least 10 ..."
+    assertFalse(
+        message.contains("at least " + DetrendedBurnAnalysis.MIN_SEASONS),
+        () -> "expected the look-ahead 400, not the 10-season minimum: " + message);
+    assertFalse(
+        message.contains("trend fit"),
+        () -> "expected the look-ahead 400, not the 10-season minimum: " + message);
   }
 
   // ---------------------------------------------------------------------------------------------
