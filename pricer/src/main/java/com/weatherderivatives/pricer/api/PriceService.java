@@ -80,9 +80,10 @@ public class PriceService {
 
   /**
    * Rejects a target season inside the season window: it would feed both the trend fit and the
-   * burn, so its own outcome would enter its price (spec 006 amendment A). A target before or after
-   * the window is allowed; with {@code first > last} the window is empty and the library reports
-   * the range.
+   * burn, so its own outcome would enter its price (spec 006 amendment A). A target after the
+   * window is a walk-forward price; one before it is allowed but is a hindcast (the trend is fitted
+   * on later seasons); with {@code first > last} the window is empty and the library reports the
+   * range.
    */
   private static void rejectLookAhead(Integer targetSeasonYear, int first, int last) {
     if (targetSeasonYear == null) {
@@ -97,13 +98,14 @@ public class PriceService {
               + first
               + ".."
               + last
-              + "): look-ahead (the priced season would feed its own price); use a year before "
-              + first
-              + " or after "
+              + "): look-ahead (the priced season would feed its own price); for a walk-forward"
+              + " back-test use a year after "
               + last
               + " (e.g. "
               + (last + 1L)
-              + ")");
+              + "); a year before "
+              + first
+              + " is allowed but is a hindcast fitted on later seasons");
     }
   }
 

@@ -271,6 +271,8 @@ class PriceEndpointPricingTest {
     // cannot satisfy either check (2011 contains neither 2001 nor 2010).
     assertWholeNumber(message, 2001);
     assertWholeNumber(message, 2010);
+    // for target 2001 the echoed target alone would satisfy 2001; the literal window proves it
+    assertContains(message, "2001..2010");
   }
 
   /** Asserts {@code text} contains {@code number} with no digit directly before or after it. */

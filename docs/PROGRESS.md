@@ -46,7 +46,7 @@ _Last updated: 2026-11-24_
   - `ParquetTemperatureLoader` requires `tmax_window_start_utc_h` / `tmin_window_start_utc_h` (same rules as `publish`), after the column checks, before rows; else `TemperatureDataException` (API 422). Form only, not per city. Fixtures write 0 / 0 by default (`writeTemps`, `writeQuery`). `DailyTemp`/`DailyTemps`/`HddIndex` Javadoc: settlement days (ADR 0005).
   - 409 Java tests green (41 new); spotless + javadoc clean; 12/12 criteria ticked.
   - Manual: real `data/pricer/london.parquet` (9 / −15) loads, 4,016 rows, 1991-01-02..2001-12-30.
-- **Spec 006 amendment A — look-ahead guard**: branch `feat/006a-lookahead-guard`, in review.
+- **Spec 006 amendment A — look-ahead guard**: branch `feat/006a-lookahead-guard`, ready for PR. Reviewed by `code-reviewer` and `quant-reviewer`: both `VERDICT: PASS` in round 1; quant SHOULD fixed (target before the window is a hindcast, not a walk-forward back-test; README `+2` note for long periods).
   - `POST /price` rejects `firstSeasonYear ≤ targetSeasonYear ≤ lastSeasonYear` with 400 (before `load()`); target before the window allowed; library unchanged. One test input changed (CALL row target 2001 → 2000, owner OK).
   - 414 Java tests green (5 new); spotless + javadoc clean; 7/7 criteria ticked.
 - **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.

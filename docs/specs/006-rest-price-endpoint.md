@@ -154,7 +154,9 @@ In:
   `invalid_request`; the message names `targetSeasonYear`, the window and "look-ahead".
 - Checked with the other request checks, before the data is loaded (so an unknown city or
   fewer than 10 seasons with an in-window target still gives this 400).
-- A target before the window (`< firstSeasonYear`) stays allowed: no leakage.
+- A target before the window (`< firstSeasonYear`) stays allowed: no leakage of the priced
+  season's own outcome, but it is a hindcast (trend fitted on later seasons), not a
+  walk-forward back-test (clarified after quant review, 2026-11-25).
 
 Out:
 - The library (`DetrendedBurnAnalysis`, `IndexDistributionAnalysis.runDetrended`) is

@@ -230,7 +230,10 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
 - **No look-ahead** (spec 006 amendment A): a `targetSeasonYear` inside
   `firstSeasonYear..lastSeasonYear` is a 400, checked before the data are read, because the
   priced season would feed its own trend fit and burn. To detrend to the latest climate use
-  `lastSeasonYear + 1`; a target before the window is allowed.
+  `lastSeasonYear + 1`. Only a target after the window is a walk-forward back-test; a target
+  before it is allowed but is a hindcast (the trend is fitted on later seasons and projected
+  backwards). For long periods (e.g. Oct–Apr or a 12-month contract) the usual trade date for
+  season `last + 1` comes before season `last` has settled; use `lastSeasonYear + 2` then.
 - **Errors** are `{"error", "message"}`: 400 `invalid_request` (the message names the field),
   404 `city_not_found`, 422 `data_error` (names the season and date), 404 / 405 / 406 / 415 for a
   wrong route, method, `Accept` or content type, and 500 `internal_error` with no details.
