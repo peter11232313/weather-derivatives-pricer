@@ -7,6 +7,8 @@ description: End-to-end workflow for implementing a feature from a spec in docs/
 1. **Spec check** — open the spec. If acceptance criteria are missing or vague,
    draft them, show me, and STOP until I approve.
 2. **Plan** — delegate to the `planner` subagent. Show me the plan; wait for OK.
+   If its first line is `PLAN: QUESTIONS (n)` (or the line is missing or malformed),
+   show me the questions first and re-run the planner with my answers.
 3. **Branch** — `git switch -c feat/<spec-number>-<slug>`.
 4. **Tests first** — delegate to `test-writer`. Confirm the new tests fail.
 5. **Implement** — smallest change per plan step; run tests after each; commit
