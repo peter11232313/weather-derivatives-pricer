@@ -220,3 +220,8 @@ Owner OK 2026-11-26: JSON only, clean break (no alias); `BurnResult.burnPriceGbp
 name. API tests that read `priceGbp` (`ApiTestSupport`, `PriceEndpointPricingTest`) switch to
 `expectedPayoffGbp` with unchanged expected values, plus an assertion that no `priceGbp` key
 remains (renames, not weakening; owner OK).
+Planner findings (`PLAN: READY`, owner OK 2026-11-26): only `BurnDto` and `NormalDto` change
+(`PriceService` builds them by position); Javadoc wording "price" → "expected payoff" in
+`PriceResponse` and `DetrendedDto`. Tests: `ApiTestSupport.assertBurn`/`assertNormal` and the
+nine `priceGbp` keys in `PriceEndpointPricingTest` switch name, values unchanged; a new
+recursive `assertNoFieldAnywhere` proves no `priceGbp` key remains. Reviewers: code + quant.
