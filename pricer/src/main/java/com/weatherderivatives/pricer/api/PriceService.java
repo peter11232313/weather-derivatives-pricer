@@ -46,7 +46,9 @@ public class PriceService {
    * @param request the request
    * @return burn and normal prices, plus detrended results when a target season is given
    * @throws InvalidRequestException if a required field is missing, or a contract term or the
-   *     season range is invalid (the library's message names the field or the minimum)
+   *     season range is invalid (the library's message names the field or the minimum), or {@code
+   *     targetSeasonYear} lies inside {@code firstSeasonYear..lastSeasonYear} (look-ahead, spec 006
+   *     amendment A; checked before the data are loaded)
    * @throws CityNotFoundException if the city name is invalid or has no data file
    * @throws com.weatherderivatives.pricer.index.TemperatureDataException if the data are invalid or
    *     a season has a missing day
@@ -58,6 +60,7 @@ public class PriceService {
     HddContract contract = contract(request);
     int first = required(request.firstSeasonYear(), "firstSeasonYear");
     int last = required(request.lastSeasonYear(), "lastSeasonYear");
+    rejectLookAhead(request.targetSeasonYear(), first, last);
     DailyTemps temps = load(request.city());
 
     return clientErrors(() -> {
@@ -73,6 +76,35 @@ public class PriceService {
       return new PriceResponse(
           request.city(), seasons(plain.burn()), burn(plain.burn()), normal(plain), detrended);
     });
+  }
+
+  /**
+   * Rejects a target season inside the season window: it would feed both the trend fit and the
+   * burn, so its own outcome would enter its price (spec 006 amendment A). A target before or after
+   * the window is allowed; with {@code first > last} the window is empty and the library reports
+   * the range.
+   */
+  private static void rejectLookAhead(Integer targetSeasonYear, int first, int last) {
+    if (targetSeasonYear == null) {
+      return;
+    }
+    int target = targetSeasonYear;
+    if (first <= target && target <= last) {
+      throw new InvalidRequestException(
+          "targetSeasonYear "
+              + target
+              + " is inside the season window firstSeasonYear..lastSeasonYear ("
+              + first
+              + ".."
+              + last
+              + "): look-ahead (the priced season would feed its own price); use a year before "
+              + first
+              + " or after "
+              + last
+              + " (e.g. "
+              + (last + 1L)
+              + ")");
+    }
   }
 
   /**
