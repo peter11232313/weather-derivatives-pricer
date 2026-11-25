@@ -183,3 +183,40 @@ years are required, before `load()`; order: contract terms → season years pres
 look-ahead → load (404/422) → library (first > last, 5/10-season minimums). With
 `first > last` the window is empty, so the guard is silent and the library's 400 follows
 the load as today. The message suggests `lastSeasonYear + 1` (computed in `long`).
+
+## Amendment B — `priceGbp` renamed `expectedPayoffGbp` (approved 2026-11-26)
+
+### Why
+The response calls both the burn and the normal result `priceGbp`, but neither is a quotable
+price: both are undiscounted expected payoffs with no risk loading, and the README has to
+warn about it. Raised by quant-reviewer in the spec 006 re-review (2026-11-24). The library
+already uses the honest name (`IndexDistributionPricing.expectedPayoffGbp`,
+`IndexDistributionResult.expectedPayoffGbp()`); the JSON follows it.
+
+### Scope
+In:
+- `burn.priceGbp` → `burn.expectedPayoffGbp` and `normal.priceGbp` →
+  `normal.expectedPayoffGbp`, everywhere they appear (also inside `detrended.burn` and
+  `detrended.normal`), via `BurnDto` and `NormalDto`.
+- Clean break, no alias for the old name: the API is localhost-only, has no outside clients
+  and no version yet. CHANGELOG marks it **breaking**.
+- README and this spec's example response and wording updated.
+
+Out:
+- Library names unchanged: `BurnResult.burnPriceGbp` stays ("burn price" is the market term
+  for the historical mean payoff).
+- Other response fields unchanged (`stdErrorGbp`, `payoffStdDevGbp`, `minPayoffGbp`,
+  `maxPayoffGbp`, season `payoffGbp`).
+- Normal-fit diagnostics; flagging an insignificant trend.
+
+### Acceptance criteria
+- [ ] Given any valid request, the response has `burn.expectedPayoffGbp` and `normal.expectedPayoffGbp` with the values the old fields had, and no `priceGbp` key anywhere.
+- [ ] Given a `targetSeasonYear`, `detrended.burn.expectedPayoffGbp` and `detrended.normal.expectedPayoffGbp` are present, values unchanged.
+- [ ] Library API and library tests unchanged.
+- [ ] All other Java tests green; README, this spec (example response), CHANGELOG (breaking), PROGRESS and the development log updated.
+
+### Decision
+Owner OK 2026-11-26: JSON only, clean break (no alias); `BurnResult.burnPriceGbp` keeps its
+name. API tests that read `priceGbp` (`ApiTestSupport`, `PriceEndpointPricingTest`) switch to
+`expectedPayoffGbp` with unchanged expected values, plus an assertion that no `priceGbp` key
+remains (renames, not weakening; owner OK).
