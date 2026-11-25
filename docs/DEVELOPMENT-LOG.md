@@ -219,6 +219,7 @@ Contents
 - **Measure before answering.** Disk space, queue time and the duplicate zip were all settled from file sizes, timestamps and value comparisons, not estimates.
 - **Long-running external work belongs in the user's terminal**, restartable and idempotent (skip existing files, temp file + atomic rename).
 - **Commits and pushes need approval**; a rejected tool call is a "no" until the user says otherwise.
+- **Planner output is machine-checkable (2026-11-25).** Like the reviewers' VERDICT line, the planner now starts with `PLAN: READY` or `PLAN: QUESTIONS (n)`; `/new-feature` step 2 stops on questions (or a missing line). The planner also reads CLAUDE.md, the ADRs and PROGRESS open questions, maps each test to an acceptance criterion, flags changes to existing tests (owner OK), names the reviewers needed and flags new dependencies. Project copy only: the `~/.claude/agents/planner.md` copy is generic and stays as it was.
 
 ## 7. Decision index
 
