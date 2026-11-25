@@ -162,13 +162,13 @@ Out:
 - A far-future target limit; flagging an insignificant trend.
 
 ### Acceptance criteria
-- [ ] Given seasons 2001–2010 and target 2011, when priced, then 200 with `detrended` (unchanged).
-- [ ] Given target 2010 (= last), 2001 (= first) or 2005 (inside), then 400 `invalid_request` naming `targetSeasonYear`, 2001, 2010 and "look-ahead".
-- [ ] Given target 2000 (before the window), then 200 with `detrended`.
-- [ ] Given an unknown city and an in-window target, then 400, not 404.
-- [ ] Given 5 seasons and an in-window target, then the look-ahead 400, not the 10-season 400.
-- [ ] Given no `targetSeasonYear`, then behaviour unchanged.
-- [ ] All other Java tests green; README (look-ahead paragraph becomes a rule), CHANGELOG, PROGRESS and the development log updated.
+- [x] Given seasons 2001–2010 and target 2011, when priced, then 200 with `detrended` (unchanged).
+- [x] Given target 2010 (= last), 2001 (= first) or 2005 (inside), then 400 `invalid_request` naming `targetSeasonYear`, 2001, 2010 and "look-ahead".
+- [x] Given target 2000 (before the window), then 200 with `detrended`.
+- [x] Given an unknown city and an in-window target, then 400, not 404.
+- [x] Given 5 seasons and an in-window target, then the look-ahead 400, not the 10-season 400.
+- [x] Given no `targetSeasonYear`, then behaviour unchanged.
+- [x] All other Java tests green; README (look-ahead paragraph becomes a rule), CHANGELOG, PROGRESS and the development log updated.
 
 ### Decision
 Owner OK 2026-11-25: reject (400), not warn: a warning is easy to ignore, and target = last

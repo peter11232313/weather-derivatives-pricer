@@ -14,6 +14,10 @@
   with or without a cap. In-house normal CDF (Cody erfc); no new dependency.
 
 ### Changed
+- pricer (spec 006 amendment A): `POST /price` rejects a `targetSeasonYear` inside
+  `firstSeasonYear..lastSeasonYear` with 400 `invalid_request` (look-ahead: the priced season
+  fed its own trend fit and burn). Checked before the data are loaded. A target before the
+  window is still allowed; the library is unchanged.
 - pricer (spec 001 amendment B, ADR 0005): `ParquetTemperatureLoader` requires the file
   metadata `tmax_window_start_utc_h` / `tmin_window_start_utc_h` (canonical integers in
   −23..23, at most 24 h apart; same rules as `publish`). A file without them, e.g. built on
