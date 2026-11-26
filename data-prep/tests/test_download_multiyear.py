@@ -139,8 +139,9 @@ def test_year_chunks_spec_example_1993_to_2023_starts_at_first_missing_year():
 
 @pytest.mark.parametrize("n", [0, -1, 4, 10])
 def test_year_chunks_rejects_years_per_request_outside_1_to_3(n):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as err:
         year_chunks([1993, 1994], n)
+    assert f"got {n}" in str(err.value)
 
 
 # --------------------------------------------------------------------------- A1
@@ -396,8 +397,9 @@ def test_a7_failed_chunk_stops_at_once_keeps_earlier_chunks_and_leaves_no_temp_f
     raw_dir, london
 ):
     client = FakeCdsClient(fail_on_calls=[2])  # 2nd temperature request raises
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_years(client, london, range(1993, 2002), raw_dir, years_per_request=3)
+    assert "era5_london_1996-1998" in str(err.value)
 
     assert len(client.calls) == 2  # chunk 1999-2001 never requested
     assert names(raw_dir) == files_for(raw_dir, [1993, 1994, 1995])
@@ -409,8 +411,9 @@ def test_a7_failed_chunk_stops_at_once_keeps_earlier_chunks_and_leaves_no_temp_f
 
 @pytest.mark.parametrize("mode", ["raise", "partial_then_raise", "garbage", "zip_corrupt"])
 def test_a7_failed_first_chunk_leaves_no_files(raw_dir, london, mode):
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_years(FakeCdsClient(mode=mode), london, [1993, 1994, 1995], raw_dir)
+    assert "era5_london_1993-1995" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 

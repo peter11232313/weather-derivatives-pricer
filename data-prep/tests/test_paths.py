@@ -40,5 +40,6 @@ def test_default_dirs_are_three_separate_folders():
 def test_repo_root_outside_a_checkout_is_an_error(tmp_path, monkeypatch):
     fake = tmp_path / "a" / "b" / "c" / "paths.py"
     monkeypatch.setattr(dataprep.paths, "__file__", str(fake))
-    with pytest.raises(DataPrepError):
+    with pytest.raises(DataPrepError) as err:
         dataprep.paths.repo_root()
+    assert "cannot find the repository" in str(err.value)

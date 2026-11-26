@@ -276,8 +276,9 @@ def test_invalid_file_is_not_published_and_existing_file_kept(processed_dir, pri
     existing = write_file(pricer_dir / "london.parquet", tmax=[7.0] * N, tmin=[2.0] * N)
     before = snapshot(pricer_dir)
     build(processed_dir / "london.parquet")
-    with pytest.raises(PublishError):
+    with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
+    assert "london.parquet" in str(err.value)
     assert snapshot(pricer_dir) == before
     assert existing.read_bytes() == before["london.parquet"]
 
@@ -285,8 +286,9 @@ def test_invalid_file_is_not_published_and_existing_file_kept(processed_dir, pri
 @pytest.mark.parametrize("build", [_gzip, _nan_tmax, _gap], ids=["gzip", "nan", "gap"])
 def test_invalid_file_into_empty_pricer_dir_leaves_it_empty(processed_dir, pricer_dir, build):
     build(processed_dir / "london.parquet")
-    with pytest.raises(PublishError):
+    with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
+    assert "london.parquet" in str(err.value)
     assert list(pricer_dir.iterdir()) == []
 
 

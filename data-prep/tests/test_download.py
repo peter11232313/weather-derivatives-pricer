@@ -107,8 +107,9 @@ def test_failed_download_raises_and_leaves_no_file(raw_dir, london, mode):
 
 def test_zip_response_is_an_error_and_leaves_no_file(raw_dir, london):
     client = FakeCdsClient(mode="zip")
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_year(client, london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 
@@ -129,10 +130,11 @@ def test_edge_day_requests_every_hour_of_one_day(raw_dir, london):
 
 
 def test_edge_day_failure_leaves_no_file(raw_dir, london):
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_edge_day(
             FakeCdsClient(mode="partial_then_raise"), london, date(2025, 1, 1), raw_dir
         )
+    assert "era5_london_20250101" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 
@@ -149,8 +151,9 @@ def test_lsm_is_its_own_request(raw_dir, london):
 
 
 def test_lsm_zip_response_is_an_error(raw_dir, london):
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_lsm(FakeCdsClient(mode="zip"), london, raw_dir)
+    assert "era5_lsm_london" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 
@@ -295,8 +298,9 @@ def test_locked_target_on_rename_is_a_download_error(raw_dir, london, monkeypatc
     ("lat", "lon"), [(89.8, 10.0), (-89.9, 10.0), (50.0, 179.8), (50.0, -179.9)]
 )
 def test_area_near_pole_or_antimeridian_is_rejected(lat, lon):
-    with pytest.raises(DataPrepError):
+    with pytest.raises(DataPrepError) as err:
         area_for(make_station(lat, lon, city="edge"))
+    assert "station edge" in str(err.value)
 
 
 def test_damaged_zip_is_a_download_error_and_not_kept(raw_dir, london):
