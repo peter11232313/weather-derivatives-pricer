@@ -18,6 +18,7 @@ Portfolio project: code quality and correctness matter more than features.
 
 ## Rules
 - Read the relevant spec before coding; if none exists, stop and ask for one.
+- Java code follows `docs/java-style.md` (types, errors, tests, Spring Boot in `api` only).
 - Write or update tests first; never weaken or delete a failing test to make it pass.
 - Units in names: `tempC`, `hddDegC`, `notionalGbp`. Dates are `LocalDate` in UTC.
 - Daily mean T = (Tmax + Tmin) / 2 unless the spec says otherwise; HDD = max(0, base − T).

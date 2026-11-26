@@ -15,6 +15,7 @@ move, delete, commit or push.
 - Changes: `git status`, `git diff <base>...HEAD` (base = `main`, or `master` if main
   doesn't exist) AND `git diff` for uncommitted work. Include new untracked files.
 - Read AGENTS.md for the project's commands, rules and definition of done.
+- Read docs/java-style.md for Java and Spring Boot conventions; a violation in changed code is a SHOULD (a BLOCKER if Spring leaks outside `api` or an error body exposes internals).
 
 ## 2. Run the checks
 Run the test and lint commands listed in AGENTS.md. Any failure is a BLOCKER.
