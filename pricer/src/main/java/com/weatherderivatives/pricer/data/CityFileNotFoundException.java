@@ -7,7 +7,7 @@ import com.weatherderivatives.pricer.index.TemperatureDataException;
  * existing callers are unaffected, while the REST layer can tell a missing file (404) from bad data
  * (422) without matching messages (spec 006).
  */
-public class CityFileNotFoundException extends TemperatureDataException {
+public final class CityFileNotFoundException extends TemperatureDataException {
 
   private static final long serialVersionUID = 1L;
 

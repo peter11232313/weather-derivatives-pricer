@@ -1,7 +1,7 @@
 package com.weatherderivatives.pricer.api;
 
 /** No data for the requested city (invalid name or missing file); mapped to 404. */
-public class CityNotFoundException extends RuntimeException {
+public final class CityNotFoundException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
 
