@@ -118,7 +118,7 @@ public class PriceService {
     try {
       return call.get();
     } catch (IllegalArgumentException | DateTimeException e) {
-      throw new InvalidRequestException(e.getMessage());
+      throw new InvalidRequestException(e.getMessage(), e);
     }
   }
 

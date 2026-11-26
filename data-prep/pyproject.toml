@@ -11,7 +11,7 @@ dependencies = [
     "cdsapi>=0.7",     # Copernicus CDS client (ERA5 downloads)
     "xarray>=2025.1",  # labelled netCDF arrays
     "netCDF4>=1.7",    # netCDF backend for xarray
-    "numpy>=2.0",
+    "numpy>=2.0",      # array maths for interpolation and daily extremes
     "pandas>=2.2",     # hourly date ranges; already required by xarray, declared as we import it
     "pyarrow>=20",     # Parquet writer with key-value metadata and Snappy
 ]

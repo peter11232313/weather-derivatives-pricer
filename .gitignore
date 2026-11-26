@@ -22,6 +22,10 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# Logs from data-prep runs
+*.log
+nohup.out
+
 # IDE / OS
 .idea/
 *.iml

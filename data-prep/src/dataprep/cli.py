@@ -6,10 +6,11 @@ Options: ``--city``, ``--start``, ``--end`` (ISO dates, inclusive), ``--registry
 
 import argparse
 import sys
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from dataprep.download import DEFAULT_YEARS_PER_REQUEST, MAX_YEARS_PER_REQUEST
+from dataprep.download import DEFAULT_YEARS_PER_REQUEST, MAX_YEARS_PER_REQUEST, CdsClient
 from dataprep.errors import DataPrepError, DownloadError, RegistryError
 from dataprep.paths import default_dirs, repo_root
 from dataprep.registry import Station, load_registry, registry_version
@@ -89,7 +90,7 @@ def _station(args: argparse.Namespace) -> Station:
     return stations[args.city]
 
 
-def _cds_client():
+def _cds_client() -> CdsClient:
     """Create the CDS client; a missing or bad ``~/.cdsapirc`` becomes a DownloadError."""
     import cdsapi
 
@@ -129,14 +130,14 @@ def _parser() -> argparse.ArgumentParser:
 
     def command(
         name: str,
-        run,
+        run: Callable[[argparse.Namespace], None],
         *,
         period: bool,
         raw: bool,
         processed: bool,
         pricer: bool,
         chunked: bool = False,
-    ):
+    ) -> None:
         sub = commands.add_parser(name)
         sub.set_defaults(run=run)
         sub.add_argument("--city", required=True, help="registry key, e.g. london")
