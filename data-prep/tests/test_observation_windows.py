@@ -763,8 +763,9 @@ def test_b9_publish_rejects_missing_or_invalid_window_metadata(
         assert TMAX_KEY in message or TMIN_KEY in message
     else:
         assert key in message
-    with pytest.raises(PublishError):
+    with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
+    assert str(processed_dir / "london.parquet") in str(err.value)
     assert list(pricer_dir.iterdir()) == []
 
 

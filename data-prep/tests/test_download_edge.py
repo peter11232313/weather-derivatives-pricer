@@ -308,8 +308,9 @@ def test_b8_edge_day_response_with_a_repeated_hour_is_rejected(raw_dir, london):
 
 @pytest.mark.parametrize("mode", ["raise", "partial_then_raise", "garbage", "zip_corrupt"])
 def test_b8_failed_edge_day_download_leaves_no_file(raw_dir, london, mode):
-    with pytest.raises(DownloadError):
+    with pytest.raises(DownloadError) as err:
         download_edge_day(FakeCdsClient(mode=mode), london, date(2025, 1, 1), raw_dir)
+    assert "era5_london_20250101" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 

@@ -202,7 +202,8 @@ class IndexDistributionPricingTest {
 
   @Test
   void nullContract_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> price(null, MU, SIGMA));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> price(null, MU, SIGMA)), "contract");
   }
 
   // ---------------------------------------------------------------------------------------------

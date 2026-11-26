@@ -484,8 +484,9 @@ def era5_file(times, mx_c=5.0, mn_c=1.0, lats=LONDON_LATS, lons=LONDON_LONS):
 
 
 def test_process_start_after_end_is_a_data_error(raw_dir, processed_dir, london):
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as err:
         process(london, date(2025, 1, 1), date(2024, 1, 1), raw_dir, processed_dir, "x", NOW)
+    assert "start 2025-01-01 is after end 2024-01-01" in str(err.value)
 
 
 def test_raw_file_missing_a_variable_names_the_path(raw_dir, london):

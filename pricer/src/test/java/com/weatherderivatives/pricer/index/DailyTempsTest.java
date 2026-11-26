@@ -78,14 +78,17 @@ class DailyTempsTest {
 
   @Test
   void nullCollectionOrElement_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> DailyTemps.of(null));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> DailyTemps.of(null)), "days");
     List<DailyTemp> withNull = new ArrayList<>();
     withNull.add(null);
-    assertThrows(NullPointerException.class, () -> DailyTemps.of(withNull));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> DailyTemps.of(withNull)), "day");
   }
 
   @Test
   void dailyTemp_nullDate_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> new DailyTemp(null, 10.0, 2.0));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> new DailyTemp(null, 10.0, 2.0)), "date");
   }
 }

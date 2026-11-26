@@ -47,15 +47,17 @@ def test_kelvin_converted_on_load_from_file_once(tmp_path):
 
 def test_normalising_twice_is_rejected_because_units_are_no_longer_kelvin():
     out = normalise(make_era5(TIMES, LATS, LONS, dtype="float64"))
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as err:
         normalise(out)
+    assert "units are 'degC'" in str(err.value)
 
 
 @pytest.mark.parametrize("units", ["degC", "C", "°C", "kelvin", "F"])
 def test_temperature_units_other_than_k_are_rejected(units):
     ds = make_era5(TIMES, LATS, LONS, units=units)
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as err:
         normalise(ds)
+    assert f"units are {units!r}" in str(err.value)
 
 
 def test_lsm_is_left_unitless_and_unconverted():

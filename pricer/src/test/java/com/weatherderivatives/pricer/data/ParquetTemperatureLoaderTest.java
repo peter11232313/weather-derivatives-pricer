@@ -305,7 +305,9 @@ class ParquetTemperatureLoaderTest {
   @ValueSource(strings = {"", "London", "../london", "lon don", "a/b", "a\\b", "london.parquet"})
   void invalidCityName_throwsIllegalArgumentException(String city) {
     ParquetTemperatureLoader loader = new ParquetTemperatureLoader(processedDir);
-    assertThrows(IllegalArgumentException.class, () -> loader.load(city));
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> loader.load(city)),
+        "city must match [a-z0-9_-]+");
   }
 
   @Test
@@ -317,7 +319,9 @@ class ParquetTemperatureLoaderTest {
 
   @Test
   void nullProcessedDir_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> new ParquetTemperatureLoader(null));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> new ParquetTemperatureLoader(null)),
+        "processedDir");
   }
 
   // ---------------------------------------------------------------------------------------------

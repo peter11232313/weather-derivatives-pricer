@@ -238,34 +238,44 @@ class IndexDistributionAnalysisTest {
     // empty data: if the range were not checked first, a TemperatureDataException would escape
     DailyTemps empty = DailyTemps.of(List.of());
     HddContract call = januaryCall(400.0, 20.0);
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> IndexDistributionAnalysis.run(call, empty, 2001, 2004));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexDistributionAnalysis.run(call, empty, 2001, 2004)),
+        "needs at least 5 seasons but got 4");
     // also with data present (burn alone would accept 4 seasons)
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> IndexDistributionAnalysis.run(call, fitExample(), 2001, 2004));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexDistributionAnalysis.run(call, fitExample(), 2001, 2004)),
+        "needs at least 5 seasons but got 4");
   }
 
   @Test
   void ac10_nineSeasonsForRunDetrended_throwsIaeBeforeReadingData() {
     DailyTemps empty = DailyTemps.of(List.of());
     HddContract call = januaryCall(200.0, 1000.0);
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> IndexDistributionAnalysis.runDetrended(call, empty, 2001, 2009, 2011));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexDistributionAnalysis.runDetrended(call, empty, 2001, 2009, 2011)),
+        "needs at least 10 seasons but got 9");
   }
 
   @Test
   void ac10_firstSeasonAfterLast_throwsIaeBeforeReadingData() {
     DailyTemps empty = DailyTemps.of(List.of());
     HddContract call = januaryCall(400.0, 20.0);
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> IndexDistributionAnalysis.run(call, empty, 2005, 2001));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> IndexDistributionAnalysis.runDetrended(call, empty, 2010, 2001, 2011));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexDistributionAnalysis.run(call, empty, 2005, 2001)),
+        "firstSeasonYear 2005 is after lastSeasonYear 2001");
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexDistributionAnalysis.runDetrended(call, empty, 2010, 2001, 2011)),
+        "firstSeasonYear 2010 is after lastSeasonYear 2001");
   }
 
   @Test
@@ -304,16 +314,26 @@ class IndexDistributionAnalysisTest {
   void nullArguments_throwNullPointerException() {
     HddContract call = januaryCall(400.0, 20.0);
     DailyTemps temps = fitExample();
-    assertThrows(
-        NullPointerException.class, () -> IndexDistributionAnalysis.run(null, temps, 2001, 2005));
-    assertThrows(
-        NullPointerException.class, () -> IndexDistributionAnalysis.run(call, null, 2001, 2005));
-    assertThrows(
-        NullPointerException.class,
-        () -> IndexDistributionAnalysis.runDetrended(null, temps, 2001, 2010, 2011));
-    assertThrows(
-        NullPointerException.class,
-        () -> IndexDistributionAnalysis.runDetrended(call, null, 2001, 2010, 2011));
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> IndexDistributionAnalysis.run(null, temps, 2001, 2005)),
+        "contract");
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> IndexDistributionAnalysis.run(call, null, 2001, 2005)),
+        "temps");
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> IndexDistributionAnalysis.runDetrended(null, temps, 2001, 2010, 2011)),
+        "contract");
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> IndexDistributionAnalysis.runDetrended(call, null, 2001, 2010, 2011)),
+        "temps");
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -364,7 +384,10 @@ class IndexDistributionAnalysisTest {
 
   @Test
   void result_nullBurn_throwsNullPointerException() {
-    assertThrows(
-        NullPointerException.class, () -> new IndexDistributionResult(400.0, 28.0, 225.0, null));
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> new IndexDistributionResult(400.0, 28.0, 225.0, null)),
+        "burn");
   }
 }

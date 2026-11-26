@@ -358,17 +358,21 @@ class DetrendedBurnAnalysisTest {
   void ac7_nineSeasons_throwsIllegalArgumentExceptionBeforeDataAccess() {
     // empty data: if the range were not checked first, a TemperatureDataException would escape
     DailyTemps empty = DailyTemps.of(List.of());
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> DetrendedBurnAnalysis.run(januaryCall(210.0), empty, 2001, 2009, 2011));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> DetrendedBurnAnalysis.run(januaryCall(210.0), empty, 2001, 2009, 2011)),
+        "needs at least 10 seasons but got 9");
   }
 
   @Test
   void ac7_firstSeasonAfterLast_throwsIllegalArgumentExceptionBeforeDataAccess() {
     DailyTemps empty = DailyTemps.of(List.of());
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> DetrendedBurnAnalysis.run(januaryCall(210.0), empty, 2010, 2001, 2011));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> DetrendedBurnAnalysis.run(januaryCall(210.0), empty, 2010, 2001, 2011)),
+        "firstSeasonYear 2010 is after lastSeasonYear 2001");
   }
 
   @Test
@@ -601,12 +605,16 @@ class DetrendedBurnAnalysisTest {
   @Test
   void nullArguments_throwNullPointerException() {
     DailyTemps temps = januaryTemps(exactTrendMeans(), 4.0);
-    assertThrows(
-        NullPointerException.class,
-        () -> DetrendedBurnAnalysis.run(null, temps, FIRST, LAST, TARGET));
-    assertThrows(
-        NullPointerException.class,
-        () -> DetrendedBurnAnalysis.run(januaryCall(210.0), null, FIRST, LAST, TARGET));
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> DetrendedBurnAnalysis.run(null, temps, FIRST, LAST, TARGET)),
+        "contract");
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> DetrendedBurnAnalysis.run(januaryCall(210.0), null, FIRST, LAST, TARGET)),
+        "temps");
   }
 
   // ---------------------------------------------------------------------------------------------
