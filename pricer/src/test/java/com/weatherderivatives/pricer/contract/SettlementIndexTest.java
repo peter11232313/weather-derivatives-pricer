@@ -191,10 +191,14 @@ class SettlementIndexTest {
   @Test
   void nullArguments_throwNullPointerException() {
     DailyTemps temps = constant(LocalDate.of(2001, 1, 1), LocalDate.of(2001, 1, 31), 14.0, 6.0);
-    assertThrows(NullPointerException.class, () -> SettlementIndex.indexHddDegC(null, temps));
-    assertThrows(
-        NullPointerException.class,
-        () -> SettlementIndex.indexHddDegC(januaryCall(JAN_2001, OptionalInt.empty()), null));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> SettlementIndex.indexHddDegC(null, temps)),
+        "contract");
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class,
+            () -> SettlementIndex.indexHddDegC(januaryCall(JAN_2001, OptionalInt.empty()), null)),
+        "temps");
   }
 
   @Test

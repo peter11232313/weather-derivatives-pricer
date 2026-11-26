@@ -17,6 +17,13 @@ class HddPayoffTest {
 
   private static final double TOL = 1e-9;
 
+  private static void assertMessageContains(Throwable ex, String expected) {
+    String msg = ex.getMessage();
+    assertTrue(
+        msg != null && msg.contains(expected),
+        () -> "expected message to contain '" + expected + "' but was: " + msg);
+  }
+
   private static final YearMonth JAN_2001 = YearMonth.of(2001, 1);
 
   private static HddContract contract(ContractType type, double strike, OptionalDouble capGbp) {
@@ -155,7 +162,9 @@ class HddPayoffTest {
 
   @Test
   void nullContract_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> HddPayoff.payoffGbp(null, 240.0));
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> HddPayoff.payoffGbp(null, 240.0)),
+        "contract");
   }
 
   // --- Non-finite index -> IllegalArgumentException ---
@@ -164,10 +173,12 @@ class HddPayoffTest {
   @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
   void nonFiniteIndex_throwsIllegalArgumentException(double indexHddDegC) {
     for (ContractType type : ContractType.values()) {
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> HddPayoff.payoffGbp(uncapped(type, 240.0), indexHddDegC),
-          () -> type + " with index " + indexHddDegC);
+      assertMessageContains(
+          assertThrows(
+              IllegalArgumentException.class,
+              () -> HddPayoff.payoffGbp(uncapped(type, 240.0), indexHddDegC),
+              () -> type + " with index " + indexHddDegC),
+          "indexHddDegC must be finite and >= 0");
     }
   }
 }

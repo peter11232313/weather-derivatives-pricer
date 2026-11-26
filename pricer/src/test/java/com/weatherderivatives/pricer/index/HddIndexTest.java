@@ -181,11 +181,13 @@ class HddIndexTest {
   @Test
   void startAfterEnd_throwsIllegalArgumentException() {
     DailyTemps temps = DailyTemps.of(fiveDayExample());
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            HddIndex.cumulativeHddDegC(
-                temps, LocalDate.of(2024, 1, 5), LocalDate.of(2024, 1, 4), 18.0));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                HddIndex.cumulativeHddDegC(
+                    temps, LocalDate.of(2024, 1, 5), LocalDate.of(2024, 1, 4), 18.0)),
+        "start 2024-01-05 is after end 2024-01-04");
   }
 
   // --- Criterion: missing day inside period -> exception names the date ---
@@ -249,11 +251,21 @@ class HddIndexTest {
 
   @Test
   void dailyHdd_nanArgument_throwsIllegalArgumentException() {
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(Double.NaN, 4.0, 18));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(12.0, Double.NaN, 18));
-    assertThrows(
-        IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(12.0, 4.0, Double.NaN));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(Double.NaN, 4.0));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(Double.NaN, 4.0, 18)),
+        "tmaxC=NaN");
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(12.0, Double.NaN, 18)),
+        "tminC=NaN");
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(12.0, 4.0, Double.NaN)),
+        "baseC=NaN");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(Double.NaN, 4.0)),
+        "tmaxC=NaN");
   }
 
   // --- Criterion: tminC > tmaxC -> exception names the date ---
@@ -269,8 +281,12 @@ class HddIndexTest {
 
   @Test
   void dailyHdd_tminAboveTmax_throwsIllegalArgumentException() {
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, 5.1, 18.0));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, 5.1));
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, 5.1, 18.0)),
+        "tminC > tmaxC");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, 5.1)),
+        "tminC > tmaxC");
   }
 
   @Test
@@ -318,11 +334,21 @@ class HddIndexTest {
   @Test
   void dailyHdd_infiniteArgument_throwsIllegalArgumentException() {
     double inf = Double.POSITIVE_INFINITY;
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, -inf, 18.0));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, 5.0, 18.0));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, -inf, 18.0));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, inf));
-    assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, -inf));
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, -inf, 18.0)),
+        "tmaxC=Infinity, tminC=-Infinity");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(inf, 5.0, 18.0)),
+        "tmaxC=Infinity");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(5.0, -inf, 18.0)),
+        "tminC=-Infinity");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, inf)),
+        "baseC=Infinity");
+    assertMessageContains(
+        assertThrows(IllegalArgumentException.class, () -> HddIndex.dailyHddDegC(10.0, 2.0, -inf)),
+        "baseC=-Infinity");
   }
 
   @Test
@@ -330,12 +356,16 @@ class HddIndexTest {
     DailyTemps temps = DailyTemps.of(fiveDayExample());
     LocalDate jan1 = LocalDate.of(2024, 1, 1);
     LocalDate jan5 = LocalDate.of(2024, 1, 5);
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.POSITIVE_INFINITY));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.NEGATIVE_INFINITY));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.POSITIVE_INFINITY)),
+        "baseC must be finite but was Infinity");
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> HddIndex.cumulativeHddDegC(temps, jan1, jan5, Double.NEGATIVE_INFINITY)),
+        "baseC must be finite but was -Infinity");
   }
 
   @Test

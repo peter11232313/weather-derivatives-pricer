@@ -353,9 +353,13 @@ class BurnAnalysisTest {
   @Test
   void nullArguments_throwNullPointerException() {
     HddContract c = january(ContractType.CALL, 240.0, OptionalDouble.empty());
-    assertThrows(
-        NullPointerException.class, () -> BurnAnalysis.run(null, januaryExample(), 2001, 2003));
-    assertThrows(NullPointerException.class, () -> BurnAnalysis.run(c, null, 2001, 2003));
+    assertMessageContains(
+        assertThrows(
+            NullPointerException.class, () -> BurnAnalysis.run(null, januaryExample(), 2001, 2003)),
+        "contract");
+    assertMessageContains(
+        assertThrows(NullPointerException.class, () -> BurnAnalysis.run(c, null, 2001, 2003)),
+        "temps");
   }
 
   // --- AC9: fewer than 2 seasons or firstSeasonYear > lastSeasonYear -> IAE ---
@@ -364,31 +368,37 @@ class BurnAnalysisTest {
   void ac9_firstSeasonAfterLast_throwsIllegalArgumentException() {
     // empty data: if the range were not checked first, a TemperatureDataException would escape
     DailyTemps empty = DailyTemps.of(List.of());
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            BurnAnalysis.run(
-                january(ContractType.CALL, 240.0, OptionalDouble.empty()), empty, 2003, 2001));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                BurnAnalysis.run(
+                    january(ContractType.CALL, 240.0, OptionalDouble.empty()), empty, 2003, 2001)),
+        "firstSeasonYear 2003 is after lastSeasonYear 2001");
   }
 
   @Test
   void ac9_singleSeason_throwsIllegalArgumentException() {
     // one season cannot give a sample std dev (n - 1 = 0); rejected before data access
     DailyTemps empty = DailyTemps.of(List.of());
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            BurnAnalysis.run(
-                january(ContractType.CALL, 240.0, OptionalDouble.empty()), empty, 2001, 2001));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                BurnAnalysis.run(
+                    january(ContractType.CALL, 240.0, OptionalDouble.empty()), empty, 2001, 2001)),
+        "needs at least 2 seasons but got 1");
     // and with valid data for that single season
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            BurnAnalysis.run(
-                january(ContractType.CALL, 240.0, OptionalDouble.empty()),
-                januaryExample(),
-                2002,
-                2002));
+    assertMessageContains(
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                BurnAnalysis.run(
+                    january(ContractType.CALL, 240.0, OptionalDouble.empty()),
+                    januaryExample(),
+                    2002,
+                    2002)),
+        "needs at least 2 seasons but got 1");
   }
 
   // --- AC11: deterministic, bit-identical results ---
