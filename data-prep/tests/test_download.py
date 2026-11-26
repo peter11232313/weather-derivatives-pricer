@@ -1,5 +1,6 @@
 """Spec 002 ACs: download area, skip-if-present, atomic writes, zip rejection, request plan."""
 
+import zipfile
 from datetime import date
 
 import pytest
@@ -29,7 +30,7 @@ from dataprep.download import (
     lsm_file,
     year_file,
 )
-from dataprep.errors import DownloadError
+from dataprep.errors import DataPrepError, DownloadError
 
 # --------------------------------------------------------------------------- area & names
 
@@ -236,3 +237,78 @@ def test_range_with_everything_present_makes_no_requests(raw_dir, london):
     paths = download_range(client, london, date(2024, 1, 1), date(2024, 12, 31), raw_dir)
     assert client.calls == []
     assert len(paths) == 3
+
+
+# --- zip responses, download checks and area limits
+
+
+def test_zip_of_split_netcdfs_is_merged_into_one_year_file(raw_dir, london):
+    client = FakeCdsClient(mode="zip_split")
+    out = download_year(client, london, 2024, raw_dir)
+    assert out == raw_dir / "era5_london_2024.nc"
+    assert not zipfile.is_zipfile(out)  # stored as merged netCDF, not the zip
+    with xr.open_dataset(out) as ds:
+        assert {"mx2t", "mn2t"} <= set(ds.data_vars)
+    assert [p.name for p in raw_dir.iterdir()] == ["era5_london_2024.nc"]
+
+
+def test_zipped_land_sea_mask_is_unpacked(raw_dir, london):
+    out = download_lsm(FakeCdsClient(mode="zip_split"), london, raw_dir)
+    with xr.open_dataset(out) as ds:
+        assert "lsm" in ds.data_vars
+    assert [p.name for p in raw_dir.iterdir()] == ["era5_lsm_london.nc"]
+
+
+def test_requests_ask_for_a_zip(raw_dir, london):
+    client = FakeCdsClient(mode="zip_split")
+    download_year(client, london, 2024, raw_dir)
+    download_lsm(client, london, raw_dir)
+    assert all(as_list(r["download_format"]) == ["zip"] for r in client.requests)
+
+
+def test_non_netcdf_download_is_rejected_and_not_kept(raw_dir, london):
+    # An HTML error page must not be renamed into place (it would never be re-fetched).
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="garbage"), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+    assert list(raw_dir.iterdir()) == []
+
+
+def test_download_missing_a_variable_is_rejected_naming_it(raw_dir, london):
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="netcdf_missing_var"), london, 2024, raw_dir)
+    assert "mn2t" in str(err.value)
+    assert list(raw_dir.iterdir()) == []
+
+
+def test_locked_target_on_rename_is_a_download_error(raw_dir, london, monkeypatch):
+    def locked(src, dst):
+        raise PermissionError(32, "The process cannot access the file", str(dst))
+
+    monkeypatch.setattr("dataprep.download.os.replace", locked)
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+
+
+@pytest.mark.parametrize(
+    ("lat", "lon"), [(89.8, 10.0), (-89.9, 10.0), (50.0, 179.8), (50.0, -179.9)]
+)
+def test_area_near_pole_or_antimeridian_is_rejected(lat, lon):
+    with pytest.raises(DataPrepError):
+        area_for(make_station(lat, lon, city="edge"))
+
+
+def test_damaged_zip_is_a_download_error_and_not_kept(raw_dir, london):
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="zip_corrupt"), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+    assert list(raw_dir.iterdir()) == []
+
+
+def test_zip_parts_with_different_time_axes_are_rejected(raw_dir, london):
+    # Merging must not pad mismatched parts with NaN (join="exact").
+    with pytest.raises(DownloadError) as err:
+        download_year(FakeCdsClient(mode="zip_misaligned"), london, 2024, raw_dir)
+    assert "era5_london_2024" in str(err.value)
+    assert list(raw_dir.iterdir()) == []

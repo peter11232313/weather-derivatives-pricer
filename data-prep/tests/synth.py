@@ -518,3 +518,30 @@ def write_lsm_file(raw_dir: Path, city: str, lsm: xr.DataArray) -> Path:
 
 def days_between(start: date, end: date) -> int:
     return (end - start).days + 1
+
+
+def valid_processed_file(path: Path, **meta_overrides: str) -> Path:
+    """Write a valid 3-day processed London file; ``meta_overrides`` replace metadata values."""
+    from dataprep.daily import DailySeries
+    from dataprep.write import write_parquet
+
+    dates = np.arange(np.datetime64("2024-01-01"), np.datetime64("2024-01-04"))
+    meta = {
+        "source": "ERA5 mx2t/mn2t",
+        "method": "bilinear",
+        "station": "London Heathrow",
+        "lat": "51.479",
+        "lon": "-0.449",
+        "start": "2024-01-01",
+        "end": "2024-01-03",
+        "registry_version": "0123456789ab",
+        "created_utc": "2026-11-16T12:00:00Z",
+        "tmean_nearest_c_mean": "5.0",
+        "tmean_3x3_c_mean": "5.0",
+        "tmax_window_start_utc_h": "0",
+        "tmin_window_start_utc_h": "0",
+    } | meta_overrides
+    series = DailySeries(
+        dates=dates, tmax_c=np.array([8.0, 9.0, 7.0]), tmin_c=np.array([1.0, 2.0, 0.0])
+    )
+    return write_parquet(path, series, meta)

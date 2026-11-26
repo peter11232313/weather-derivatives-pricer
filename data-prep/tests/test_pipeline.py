@@ -465,3 +465,83 @@ def test_processed_file_schema_compression_and_metadata(tmp_path, raw_dir, proce
     assert kv["created_utc"].startswith("2026-11-16T12:00")
     assert float(kv["tmean_nearest_c_mean"]) == pytest.approx(13.0, abs=1e-9)
     assert float(kv["tmean_3x3_c_mean"]) == pytest.approx(13.0, abs=1e-9)
+
+
+# --- pipeline robustness: bad periods and raw files, errors name the city
+
+
+def era5_file(times, mx_c=5.0, mn_c=1.0, lats=LONDON_LATS, lons=LONDON_LONS):
+    return make_era5(
+        times,
+        lats,
+        lons,
+        mx2t_k=mx_c + KELVIN,
+        mn2t_k=mn_c + KELVIN,
+        dtype="float64",
+        time_name="valid_time",
+        lat_descending=True,
+    )
+
+
+def test_process_start_after_end_is_a_data_error(raw_dir, processed_dir, london):
+    with pytest.raises(DataError):
+        process(london, date(2025, 1, 1), date(2024, 1, 1), raw_dir, processed_dir, "x", NOW)
+
+
+def test_raw_file_missing_a_variable_names_the_path(raw_dir, london):
+    ds = era5_file(hours("2024-01-01T00:00", "2024-01-02T00:00"))[["mx2t"]]
+    write_year_file(raw_dir, "london", 2024, ds)
+    with pytest.raises(DataError) as err:
+        load_hourly(london, date(2024, 1, 1), date(2024, 1, 1), raw_dir)
+    assert "era5_london_2024" in str(err.value) and "mn2t" in str(err.value)
+
+
+def test_raw_file_on_a_different_grid_names_the_path(raw_dir, london):
+    # Downloaded before the station moved: box shifted north by one cell.
+    shifted = [lat + 0.25 for lat in LONDON_LATS]
+    write_year_file(
+        raw_dir,
+        "london",
+        2024,
+        era5_file(hours("2024-01-01T00:00", "2024-01-02T00:00"), lats=shifted),
+    )
+    with pytest.raises(DataError) as err:
+        load_hourly(london, date(2024, 1, 1), date(2024, 1, 1), raw_dir)
+    assert "era5_london_2024" in str(err.value)
+
+
+def test_edge_day_file_is_accepted_and_scalar_time_step_file_ignored(
+    raw_dir, processed_dir, london
+):
+    # Amendment B: 2025-01-01 00:00 (12 / -3) comes from the whole-day edge file, as
+    # Copernicus delivers it (valid_time, latitude N->S). A leftover old one-step file with
+    # its time squeezed to a scalar (99 / -99) is never read.
+    write_year_file(
+        raw_dir, "london", 2024, era5_file(hours("2024-12-31T00:00", "2024-12-31T23:00"))
+    )
+    mx_c = np.array([12.0] + [30.0] * 23)[:, None, None]
+    mn_c = np.array([-3.0] + [-30.0] * 23)[:, None, None]
+    edge = era5_file(hours("2025-01-01T00:00", "2025-01-01T23:00"), mx_c=mx_c, mn_c=mn_c)
+    write_edge_day_file(raw_dir, "london", date(2025, 1, 1), edge)
+    step = era5_file(hours("2025-01-01T00:00", "2025-01-01T00:00"), mx_c=99.0, mn_c=-99.0)
+    write_step_file(raw_dir, "london", 2025, step.isel(valid_time=0))  # time squeezed to scalar
+    write_lsm_file(raw_dir, "london", make_lsm(LONDON_LATS, LONDON_LONS))
+    out = process(london, date(2024, 12, 31), date(2024, 12, 31), raw_dir, processed_dir, "x", NOW)
+    assert pq.read_table(out).column("tmax_c").to_pylist() == pytest.approx([12.0], abs=1e-9)
+    assert pq.read_table(out).column("tmin_c").to_pylist() == pytest.approx([-3.0], abs=1e-9)
+
+
+def test_process_errors_name_the_city(raw_dir, processed_dir, london):
+    times = hours("2024-01-01T00:00", "2024-01-02T00:00").delete(13)
+    write_year_file(raw_dir, "london", 2024, era5_file(times))
+    write_lsm_file(raw_dir, "london", make_lsm(LONDON_LATS, LONDON_LONS))
+    with pytest.raises(DataError) as err:
+        process(london, date(2024, 1, 1), date(2024, 1, 1), raw_dir, processed_dir, "x", NOW)
+    assert "london" in str(err.value) and "2024-01-01T13:00" in str(err.value)
+
+
+def test_process_error_names_the_city_once(raw_dir, processed_dir):
+    station = make_station(city="london")
+    with pytest.raises(DataError) as err:
+        process(station, date(2024, 1, 1), date(2024, 1, 1), raw_dir, processed_dir, "x", NOW)
+    assert str(err.value).count("london") == 1 + str(err.value).count("era5_london")

@@ -14,6 +14,7 @@ from synth import (
     write_year_file,
 )
 
+import dataprep.paths
 from dataprep.cli import main
 
 REGISTRY = """\
@@ -223,3 +224,67 @@ def test_a8_build_years_per_request_2_chunks_requests_in_twos(registry, tmp_path
     assert main(argv) == 0
     assert client.temperature_years() == [["1995", "1996"], ["1997", "1998"]]
     assert (tmp_path / "pricer" / "london.parquet").is_file()
+
+
+# --- missing credentials, registry or checkout
+
+
+def test_cli_download_without_cds_credentials_exits_1(tmp_path, monkeypatch, capsys):
+    import cdsapi
+
+    def no_config(*args, **kwargs):
+        raise Exception("Missing/incomplete configuration file: ~/.cdsapirc")
+
+    monkeypatch.setattr(cdsapi, "Client", no_config)
+    registry = tmp_path / "stations.toml"
+    registry.write_text(
+        '[london]\nstation = "London Heathrow"\nwmo_id = "03772"\nicao = "EGLL"\n'
+        "lat = 51.479\nlon = -0.449\n"
+        "tmax_window_start_utc_h = 0\ntmin_window_start_utc_h = 0\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "download",
+            "--city",
+            "london",
+            "--start",
+            "2024-01-01",
+            "--end",
+            "2024-01-02",
+            "--registry",
+            str(registry),
+            "--raw-dir",
+            str(tmp_path / "raw"),
+        ]
+    )
+    assert code == 1
+    assert ".cdsapirc" in capsys.readouterr().err
+
+
+def test_cli_missing_registry_exits_1(tmp_path, capsys):
+    code = main(
+        [
+            "process",
+            "--city",
+            "london",
+            "--start",
+            "2024-01-01",
+            "--end",
+            "2024-01-01",
+            "--registry",
+            str(tmp_path / "nope.toml"),
+            "--raw-dir",
+            str(tmp_path),
+            "--processed-dir",
+            str(tmp_path),
+        ]
+    )
+    assert code == 1
+    assert "nope.toml" in capsys.readouterr().err
+
+
+def test_cli_outside_a_checkout_exits_1_without_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(dataprep.paths, "__file__", str(tmp_path / "a" / "b" / "c" / "paths.py"))
+    assert main(["publish", "--city", "london"]) == 1
+    assert "pip install -e" in capsys.readouterr().err
