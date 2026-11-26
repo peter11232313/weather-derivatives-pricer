@@ -120,3 +120,12 @@ def test_registry_version_changes_when_file_changes(tmp_path):
     before = registry_version(path)
     path.write_text(LONDON_TOML.replace("51.479", "51.4775"), encoding="utf-8")
     assert registry_version(path) != before
+
+
+# --- missing registry file
+
+
+def test_missing_registry_file_is_a_registry_error(tmp_path):
+    with pytest.raises(RegistryError) as err:
+        load_registry(tmp_path / "nope.toml")
+    assert "nope.toml" in str(err.value)

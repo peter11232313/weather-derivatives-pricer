@@ -77,6 +77,7 @@ _Last updated: 2026-11-24_
 - code NITs: spec says the 404 message names the path but the API names the city only (better; amend the spec); 422 bodies include the full file path.
 
 **Repo housekeeping**
+- 2026-11-26: review follow-up tests moved out of `test_review_fixes.py`, `test_download_review.py` and `PriceEndpointReviewFollowUpsTest.java` into their module test files (pure move; 462 Python / 414 Java tests unchanged).
 - 2026-11-25: 13 merged remote branches deleted; GitHub "automatically delete head branches" turned on, so merged PR branches go away on their own (delete the local branch after `git pull`).
 - Parallel reviewers running Gradle in the same `pricer/build` crash with `EOFException` / `NoSuchFileException in-progress-results-generic.bin`; run the test suite once alone.
 - Subagents `code-reviewer`, `planner`, `test-writer` copied (not moved) into `.claude/agents/` (2026-11-20); the originals stay in `~/.claude/agents/`. Inside this repo the project copies take precedence, so edit those.

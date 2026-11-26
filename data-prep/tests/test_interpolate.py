@@ -4,7 +4,15 @@ from datetime import date
 
 import numpy as np
 import pytest
-from synth import LONDON_LATS, LONDON_LONS, field_c, hours, linear_c, make_lsm, make_station
+from synth import (
+    LONDON_LATS,
+    LONDON_LONS,
+    field_c,
+    hours,
+    linear_c,
+    make_lsm,
+    make_station,
+)
 
 from dataprep.daily import daily_extremes
 from dataprep.errors import DataError
@@ -211,3 +219,71 @@ def test_mean_3x3_is_centred_on_the_nearest_cell():
 def test_mean_3x3_of_linear_field_equals_centre_value():
     field = linear_field(LONDON_LATS, LONDON_LONS, n_times=2)
     np.testing.assert_allclose(mean_3x3(field, 51.479, -0.449).values, [14.0, 15.0], atol=1e-9)
+
+
+# --- land check and interpolation weights (ADR 0003)
+
+
+CELL_LATS, CELL_LONS = [51.25, 51.5], [-0.5, -0.25]
+
+
+def static_linear_field(lats=LONDON_LATS, lons=LONDON_LONS):
+    lat2, lon2 = np.meshgrid(lats, lons, indexing="ij")
+    return field_c(linear_c(lat2, lon2), lats, lons)
+
+
+@pytest.mark.parametrize("corner", [(lat, lon) for lat in CELL_LATS for lon in CELL_LONS])
+def test_any_of_the_four_surrounding_cells_sea_switches_to_nearest_land(corner):
+    lsm = make_lsm(LONDON_LATS, LONDON_LONS, sea_cells=[corner])
+    _, method = to_station(static_linear_field(), lsm, make_station())
+    assert method == "nearest_land"
+
+
+@pytest.mark.parametrize("outside", [(51.0, -0.5), (51.75, -0.25), (51.5, -0.75), (51.25, 0.0)])
+def test_sea_cell_just_outside_the_block_keeps_bilinear(outside):
+    lsm = make_lsm(LONDON_LATS, LONDON_LONS, sea_cells=[outside])
+    _, method = to_station(static_linear_field(), lsm, make_station())
+    assert method == "bilinear"
+
+
+def test_station_on_a_grid_line_ignores_zero_weight_sea_cells():
+    # Station (51.5, -0.4) lies on the 51.5 line; row 51.75 has zero weight.
+    # linear_c(51.5, -0.4) = 10 + 16*0.25 + 8*0.1 = 14.8 (nearest land would give 14.0).
+    lsm = make_lsm(LONDON_LATS, LONDON_LONS, sea_cells=[(51.75, -0.5)])
+    series, method = to_station(static_linear_field(), lsm, make_station(51.5, -0.4, city="line"))
+    assert method == "bilinear"
+    assert series.values[0] == pytest.approx(14.8, abs=1e-9)
+
+
+def test_station_on_a_grid_node_ignores_zero_weight_sea_cells():
+    lsm = make_lsm(LONDON_LATS, LONDON_LONS, sea_cells=[(51.75, -0.25)])
+    series, method = to_station(static_linear_field(), lsm, make_station(51.5, -0.5, city="node"))
+    assert method == "bilinear"
+    assert series.values[0] == pytest.approx(14.0, abs=1e-9)
+
+
+def test_bilinear_cross_term_at_heathrow():
+    # Only the upper-right corner (51.5, -0.25) is 1: value = wy * wx = 0.916 * 0.204.
+    values = np.zeros((2, 2))
+    values[1, 1] = 1.0
+    out = bilinear(field_c(values, CELL_LATS, CELL_LONS), 51.479, -0.449)
+    assert out.values[0] == pytest.approx(0.916 * 0.204, abs=1e-12)
+
+
+def test_nearest_land_scales_by_cos_of_station_latitude_not_cell_latitude():
+    # Station (60.0, 0.0). Land only at A (59.75, 0.25) and B (60.25, 0.25).
+    # cos(station lat): both sqrt(0.25^2 + (0.25*cos60)^2) -> exact tie -> lower lat A.
+    # cos(cell lat) would give B (cos 60.25 < cos 59.75 makes B's dlon shorter).
+    lats, lons = [59.75, 60.0, 60.25], [-0.25, 0.0, 0.25]
+    lat2, lon2 = np.meshgrid(lats, lons, indexing="ij")
+    field = field_c(100.0 * lat2 + lon2, lats, lons)
+    lsm = make_lsm(lats, lons, land=0.0, land_cells=[(59.75, 0.25), (60.25, 0.25)])
+    out = nearest_land(field, lsm, 60.0, 0.0, city="north")
+    assert out.values[0] == pytest.approx(100.0 * 59.75 + 0.25)
+
+
+def test_interpolation_does_not_depend_on_dimension_order():
+    field = static_linear_field().transpose("latitude", "longitude", "time")
+    lsm = make_lsm(LONDON_LATS, LONDON_LONS)
+    series, _ = to_station(field, lsm, make_station())
+    assert series.values[0] == pytest.approx(14.072, abs=1e-9)

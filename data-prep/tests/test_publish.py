@@ -10,6 +10,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from synth import valid_processed_file
 
 from dataprep.errors import PublishError
 from dataprep.publish import publish, validate
@@ -286,4 +287,39 @@ def test_invalid_file_into_empty_pricer_dir_leaves_it_empty(processed_dir, price
     build(processed_dir / "london.parquet")
     with pytest.raises(PublishError):
         publish("london", processed_dir, pricer_dir)
+    assert list(pricer_dir.iterdir()) == []
+
+
+# --- metadata values and a locked target
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"method": "cubic"},
+        {"source": "ERA5 t2m"},
+        {"registry_version": "not-a-hash"},
+        {"registry_version": "0123456789AB"},
+    ],
+    ids=["method", "source", "registry-version", "registry-version-uppercase"],
+)
+def test_publish_checks_metadata_values(tmp_path, override):
+    path = valid_processed_file(tmp_path / "london.parquet", **override)
+    with pytest.raises(PublishError) as err:
+        validate(path)
+    assert next(iter(override)) in str(err.value)
+
+
+def test_publish_locked_target_is_a_publish_error_and_pricer_unchanged(
+    processed_dir, pricer_dir, monkeypatch
+):
+    valid_processed_file(processed_dir / "london.parquet")
+
+    def locked(src, dst):
+        raise PermissionError(32, "The process cannot access the file", str(dst))
+
+    monkeypatch.setattr("dataprep.publish.os.replace", locked)
+    with pytest.raises(PublishError) as err:
+        publish("london", processed_dir, pricer_dir)
+    assert "london.parquet" in str(err.value)
     assert list(pricer_dir.iterdir()) == []

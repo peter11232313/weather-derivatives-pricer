@@ -4,8 +4,10 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from synth import valid_processed_file
 
 from dataprep.daily import DailySeries
+from dataprep.errors import DataPrepError
 from dataprep.write import REQUIRED_METADATA_KEYS, write_parquet
 
 METADATA = {
@@ -88,3 +90,17 @@ def test_missing_metadata_key_raises_and_writes_nothing(tmp_path, missing):
     with pytest.raises(ValueError):
         write_parquet(out_dir / "london.parquet", leap_series(), meta)
     assert list(out_dir.iterdir()) == []
+
+
+# --- locked target
+
+
+def test_write_locked_target_is_a_data_prep_error(tmp_path, monkeypatch):
+    def locked(src, dst):
+        raise PermissionError(32, "The process cannot access the file", str(dst))
+
+    monkeypatch.setattr("dataprep.write.os.replace", locked)
+    with pytest.raises(DataPrepError) as err:
+        valid_processed_file(tmp_path / "london.parquet")
+    assert "london.parquet" in str(err.value)
+    assert list(tmp_path.iterdir()) == []

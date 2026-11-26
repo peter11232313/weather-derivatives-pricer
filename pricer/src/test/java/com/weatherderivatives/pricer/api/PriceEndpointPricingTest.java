@@ -462,4 +462,16 @@ class PriceEndpointPricingTest {
         cap == null ? OptionalDouble.empty() : OptionalDouble.of(cap),
         decimals == null ? OptionalInt.empty() : OptionalInt.of(decimals));
   }
+
+  // --- default base temperature
+
+  @Test
+  void baseCOmitted_equalsBaseC18() throws Exception {
+    Map<String, Object> omitted = workedExampleRequest("london");
+    omitted.put("dailyHddDecimals", 1);
+    Map<String, Object> explicit = workedExampleRequest("london");
+    explicit.put("dailyHddDecimals", 1);
+    explicit.put("baseC", 18.0);
+    assertEquals(assertOk(postPrice(mvc, explicit)), assertOk(postPrice(mvc, omitted)));
+  }
 }

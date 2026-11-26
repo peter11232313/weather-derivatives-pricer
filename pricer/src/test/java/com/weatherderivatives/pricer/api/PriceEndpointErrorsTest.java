@@ -8,7 +8,9 @@ import static com.weatherderivatives.pricer.api.ApiTestSupport.postPrice;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.toJson;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.workedExampleRequest;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.writeCity;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -431,5 +433,64 @@ class PriceEndpointErrorsTest {
 
   private static DailyTemp hot(LocalDate date) {
     return new DailyTemp(date, 70.0, 1.0);
+  }
+
+  // --- strict JSON types, trailing content, and headers on Spring's own 405 / 406
+
+  @Test
+  void enumGivenAsNumber_type1_400NamingType() throws Exception {
+    // used to be read as the enum's index: 1 priced a PUT with 200
+    Map<String, Object> req = workedExampleRequest("london");
+    req.put("type", 1);
+    assertContains(assertError(postPrice(mvc, req), 400, "invalid_request"), "type");
+  }
+
+  @Test
+  void enumGivenAsNumericString_type1_400NamingType() throws Exception {
+    Map<String, Object> req = workedExampleRequest("london");
+    req.put("type", "1");
+    assertContains(assertError(postPrice(mvc, req), 400, "invalid_request"), "type");
+  }
+
+  @Test
+  void textGivenAsBoolean_cityTrue_400NamingCity() throws Exception {
+    // used to become the text "true" and give 404
+    Map<String, Object> req = workedExampleRequest("london");
+    req.put("city", true);
+    assertContains(assertError(postPrice(mvc, req), 400, "invalid_request"), "city");
+  }
+
+  @Test
+  void getPrice_405CarriesAllowHeaderWithPost() throws Exception {
+    MockHttpServletResponse response = mvc.perform(get("/price")).andReturn().getResponse();
+    assertError(response, 405, "method_not_allowed");
+    String allow = response.getHeader("Allow");
+    assertNotNull(allow, "405 must carry an Allow header (RFC 9110)");
+    assertTrue(allow.contains("POST"), () -> "Allow header was: " + allow);
+  }
+
+  @Test
+  void integerTooLargeForField_400NamingField() throws Exception {
+    String body =
+        toJson(workedExampleRequest("london"))
+            .replace("\"firstSeasonYear\":2001", "\"firstSeasonYear\":99999999999");
+    assertContains(assertError(postPrice(mvc, body), 400, "invalid_request"), "firstSeasonYear");
+  }
+
+  @Test
+  void trailingContentAfterObject_400SaysTrailingContent() throws Exception {
+    String body = toJson(workedExampleRequest("london")) + " {}";
+    String message = assertError(postPrice(mvc, body), 400, "invalid_request");
+    assertTrue(
+        message.toLowerCase(java.util.Locale.ROOT).contains("after"),
+        () -> "expected a message about content after the JSON object but was: " + message);
+  }
+
+  @Test
+  void healthWithAcceptTextPlain_406NotAcceptable() throws Exception {
+    MockHttpServletResponse response =
+        mvc.perform(get("/health").accept(MediaType.TEXT_PLAIN)).andReturn().getResponse();
+    // Status only: the client refused JSON, so no {error, message} body can be sent to it.
+    assertEquals(406, response.getStatus(), () -> "status was " + response.getStatus());
   }
 }
