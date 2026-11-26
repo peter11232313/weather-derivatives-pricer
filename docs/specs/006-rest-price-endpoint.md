@@ -60,9 +60,9 @@ Response (200):
 {
   "city": "london",
   "seasons": [{"seasonYear": 1992, "indexHddDegC": 435.8, "payoffGbp": 716.0}, "..."],
-  "burn": {"priceGbp": 436.0, "stdErrorGbp": 178.10, "payoffStdDevGbp": 563.21,
+  "burn": {"expectedPayoffGbp": 436.0, "stdErrorGbp": 178.10, "payoffStdDevGbp": 563.21,
            "minPayoffGbp": 0.0, "maxPayoffGbp": 1732.0, "meanIndexHddDegC": 414.3},
-  "normal": {"priceGbp": 456.17, "meanIndexHddDegC": 414.3, "sdIndexHddDegC": 36.4},
+  "normal": {"expectedPayoffGbp": 456.17, "meanIndexHddDegC": 414.3, "sdIndexHddDegC": 36.4},
   "detrended": null
 }
 ```
@@ -210,10 +210,10 @@ Out:
 - Normal-fit diagnostics; flagging an insignificant trend.
 
 ### Acceptance criteria
-- [ ] Given any valid request, the response has `burn.expectedPayoffGbp` and `normal.expectedPayoffGbp` with the values the old fields had, and no `priceGbp` key anywhere.
-- [ ] Given a `targetSeasonYear`, `detrended.burn.expectedPayoffGbp` and `detrended.normal.expectedPayoffGbp` are present, values unchanged.
-- [ ] Library API and library tests unchanged.
-- [ ] All other Java tests green; README, this spec (example response), CHANGELOG (breaking), PROGRESS and the development log updated.
+- [x] Given any valid request, the response has `burn.expectedPayoffGbp` and `normal.expectedPayoffGbp` with the values the old fields had, and no `priceGbp` key anywhere.
+- [x] Given a `targetSeasonYear`, `detrended.burn.expectedPayoffGbp` and `detrended.normal.expectedPayoffGbp` are present, values unchanged.
+- [x] Library API and library tests unchanged.
+- [x] All other Java tests green; README, this spec (example response), CHANGELOG (breaking), PROGRESS and the development log updated.
 
 ### Decision
 Owner OK 2026-11-26: JSON only, clean break (no alias); `BurnResult.burnPriceGbp` keeps its

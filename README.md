@@ -240,9 +240,10 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
 - The city file is read on every request, so a republished file is used without a restart.
 
 How to read the numbers:
-- Every `priceGbp` is an **undiscounted expected payoff with no risk loading**, not a quote.
-- `burn.stdErrorGbp` covers only the spread of past payoffs. The normal price does not include the
-  uncertainty of σ itself (about ±25% with 10 seasons).
+- Every `expectedPayoffGbp` (burn and normal, plain and detrended) is an **undiscounted expected
+  payoff with no risk loading**, not a quote. (Before spec 006 amendment B the field was `priceGbp`.)
+- `burn.stdErrorGbp` covers only the spread of past payoffs. The normal expected payoff does not
+  include the uncertainty of σ itself (about ±25% with 10 seasons).
 - The detrended standard errors leave out the uncertainty of the fitted slope; check
   `slopeStdErrDegCPerYear`.
 
