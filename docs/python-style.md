@@ -23,7 +23,8 @@ wins.
   code returns values or raises.
 
 ## Types and values
-- Type-hint every function signature, including return types, and every class attribute. Use
+- Type-hint every function signature in library code, including return types, and every class
+  attribute (test functions are exempt; fixtures and helpers should still be typed). Use
   built-in generics (`list[int]`), `X | None`, and `collections.abc` for parameters
   (`Sequence`, `Mapping`).
 - Run a type checker (mypy or pyright) where the project has one; avoid `Any` except at untyped
@@ -69,7 +70,8 @@ wins.
   `conftest.py`, test data builders in a helper module.
 - Names describe behaviour: `test_<unit>_<condition>_<result>`. Name test files after the module
   or behaviour they test, not after where the test came from (no `test_review_fixes.py`).
-- `pytest.mark.parametrize` for input tables, with readable ids.
+- `pytest.mark.parametrize` for input tables; pass `ids=` when the generated ids would not say
+  which case failed.
 - Error tests check the message names the thing at fault, with `pytest.raises(..., match=...)` or
   by asserting on `err.value`.
 - Floats: `pytest.approx` or `numpy.testing.assert_allclose` with an explicit tolerance; exact

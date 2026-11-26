@@ -18,7 +18,9 @@ this project. AGENTS.md comes first; where "This project" differs from the gener
 ## Design
 - Small classes with one reason to change; small methods that do one thing at one level of
   abstraction.
-- Prefer composition over inheritance. Make classes `final` unless designed for extension.
+- Prefer composition over inheritance. Make classes `final` unless designed for extension
+  (framework-managed classes that are subclassed at runtime, such as Spring `@Configuration`,
+  are exempt).
 - Keep visibility as narrow as possible: private by default, package-private before public.
 - Depend on interfaces at boundaries (I/O, clocks, external services) so tests can substitute
   them; don't add interfaces with a single implementation elsewhere.
