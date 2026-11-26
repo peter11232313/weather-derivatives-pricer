@@ -1,73 +1,111 @@
 # Python style
 
-Applies to `data-prep/`. AGENTS.md rules come first. Ruff formats and lints (line length 100,
-rules E F W I UP B D, Google docstrings; `ruff check --fix && ruff format`). Python ≥ 3.12.
+General best practice for modern Python (3.12+), followed by the rules specific to this project.
+AGENTS.md comes first; where "This project" differs from the general guidance, "This project"
+wins.
 
-## Structure
-- Package in `src/dataprep/`, one module per pipeline stage (`download`, `daily`, `interpolate`,
-  `write`, `publish`), with `pipeline` joining them and `cli` as the only entry point.
-- Only the entry points (`cli.py`, and `__main__.py` for `sys.exit`) print, read `sys.argv` or
-  exit. Library functions return values or raise; no `print`, no `sys.exit`.
-- Module-private helpers start with `_`. Constants are `UPPER_CASE` at module top, with a comment
-  naming the spec or ADR when they encode a rule (e.g. `MAX_WINDOW_START_H`, ADR 0005).
+## Formatting and naming
+- Let the tools decide layout and import order (Ruff format and lint here); never hand-format.
+- PEP 8 names: `snake_case` functions and variables, `PascalCase` classes, `UPPER_SNAKE_CASE`
+  module constants, a leading `_` for module-private names.
+- Clear names over comments; no single-letter names except loop indices and maths with a
+  documented convention. Put units in names (`timeout_s`, `tmax_c`, `lat_deg`).
+
+## Design
+- Small functions that do one thing; prefer pure functions that take inputs and return outputs
+  over functions that mutate shared state.
+- No module-level mutable state and no work at import time (no I/O, no network).
+- Keep I/O at the edges: parse and validate input, run pure logic, then write output.
+- Depend on protocols (`typing.Protocol`) at boundaries (network clients, clocks) so tests can
+  pass a fake.
+- Prefer composition over inheritance; avoid deep class hierarchies.
+- Only the entry point (CLI, `__main__`) prints, reads `sys.argv` or calls `sys.exit`. Library
+  code returns values or raises.
 
 ## Types and values
-- Type hints on every function signature (public and private, including return types) and every
-  dataclass field; use built-in generics and `X | None` (ruff `UP` enforces the modern forms).
-- Value types are `@dataclass(frozen=True)`. Validate when loading (e.g. `load_registry`), not
-  later at the point of use.
-- Units in snake_case names: `tmax_c`, `lat_deg`, `tmax_window_start_utc_h`.
-- Dates are `datetime.date`; datetimes are timezone-aware UTC (`datetime.now(UTC)`), never naive.
-- External services sit behind a `Protocol` (`CdsClient`) so tests pass a fake; no
-  `unittest.mock` for our own seams.
-- `Any` only at untyped third-party boundaries (the CDS client), never in our own data types.
+- Type-hint every function signature, including return types, and every class attribute. Use
+  built-in generics (`list[int]`), `X | None`, and `collections.abc` for parameters
+  (`Sequence`, `Mapping`).
+- Run a type checker (mypy or pyright) where the project has one; avoid `Any` except at untyped
+  third-party boundaries.
+- Use `@dataclass(frozen=True)` (or `NamedTuple`) for values; validate on construction or at load
+  time, then trust the type.
+- Use `enum.Enum` or `Literal` instead of magic strings.
+- Never use a mutable default argument; use `None` and create the value inside.
+- Dates are `datetime.date`; datetimes are timezone-aware (`datetime.now(UTC)`), never naive.
+- Use `decimal.Decimal` where decimal exactness matters (money, specified rounding).
 
 ## Errors
-- Bad data, files or downloads raise a subclass of `DataPrepError` (`RegistryError`,
-  `DataError`, `DownloadError`, `PublishError`). The message names the entry, date, timestamp or
-  path.
-- A caller passing an invalid argument (a bug, not bad data) raises `ValueError`, documented
-  under `Raises:` (e.g. `year_chunks`, `write_parquet`).
-- Never return NaN-padded or partial data in place of an error. Check completeness (hours, days,
-  metadata) before writing.
-- `cli.main` maps `DataPrepError` to exit code 1 with `error: ...` on stderr; bad arguments are
-  exit 2 (argparse). Any other exception is a bug and should surface with its traceback.
+- Raise specific exceptions; define a small project hierarchy under one base class for expected
+  failures (bad data, failed download).
+- A caller passing an invalid argument raises `ValueError` / `TypeError`.
+- Messages name the input and the bad value (file, date, field).
+- Never use a bare `except:` or swallow exceptions. Catch the narrowest type you can handle; use
+  `raise ... from e` to keep the cause.
+- Don't return sentinel values (`None`, NaN, partial results) in place of an error.
+- Document raised exceptions in the docstring.
 
-## Files and data
-- `pathlib.Path` everywhere; no string paths, no `os.path`.
-- Write atomically: write to `*.tmp` next to the target, then `os.replace`. A crash never leaves
-  a half-written file under its final name.
-- Folders: `data/raw` → `data/processed` → (validated `publish`) → `data/pricer`. Only
-  `publish` writes to `data/pricer`.
-- Parquet carries its metadata (station, windows, registry version). Java checks it, so a key
-  rename is a cross-language change: update the spec and the Java loader together.
-- Units, physics and time handling for ERA5: follow the `era5-data` skill and ADRs 0002, 0003
-  and 0005.
+## Files, resources and data
+- `pathlib.Path` for all paths; no string joining, no `os.path`.
+- Use context managers (`with`) for files, locks and connections.
+- Write files atomically: write to a temporary file in the same folder, then `os.replace`.
+- Specify encodings explicitly (`encoding="utf-8"`).
+- NumPy/pandas/xarray: vectorise instead of looping over rows; set dtypes explicitly; avoid
+  chained assignment; check for NaN and missing timestamps rather than assuming completeness;
+  keep time indexes timezone-aware or explicitly UTC.
 
-## Docs
-- Google-style docstrings on every public module, class and function (ruff `D`): `Args`,
-  `Returns`, `Raises` and `Attributes` when they apply. Tests are exempt.
-- Docstrings state units and conventions, e.g. "London is 9 (D 09:00..D+1 09:00)".
+## Documentation
+- Docstrings (Google style here) on every public module, class and function: summary line, then
+  `Args`, `Returns`, `Raises` and `Attributes` as needed. State units and conventions.
+- Comments explain why, not what. Link the spec or ADR a non-obvious rule comes from.
 
-## Tests
-- pytest only. `tmp_path` for files; shared fixtures in `conftest.py`; synthetic ERA5 data and
-  fakes in `tests/synth.py`. Tests never download and never read `data/`.
-- Names describe behaviour: `test_<unit>_<condition>_<result>`, e.g.
-  `test_cli_publish_missing_file_exits_1_with_message_on_stderr`.
-- `pytest.mark.parametrize` for input tables. An error test checks that the message names the
-  thing at fault, with `pytest.raises(..., match=...)` or by asserting on `err.value`.
-- Floats: `pytest.approx` or `numpy.testing.assert_allclose` with an explicit tolerance;
-  bit-for-bit (`==`) only where the spec says the value must survive a round trip.
-- `monkeypatch` for environment and module seams; prefer passing a fake through a `Protocol`.
-- Name test files by behaviour, not by origin: no new `test_review_fixes.py`-style files.
+## Logging and output
+- Libraries use `logging` (`logger = logging.getLogger(__name__)`), never `print`; configure
+  handlers only in the entry point.
+- Use lazy formatting (`logger.info("loaded %s", path)`); never log secrets.
 
-## Dependencies
-- Declared in `pyproject.toml` with a minimum version and a one-line comment saying why. A new
-  one needs a reason in the PR (AGENTS.md).
-- One Copernicus request at a time; never put credentials in code or tests (`~/.cdsapirc` only).
+## Testing (pytest)
+- Plain test functions and fixtures; no `unittest.TestCase` classes. Shared fixtures in
+  `conftest.py`, test data builders in a helper module.
+- Names describe behaviour: `test_<unit>_<condition>_<result>`. Name test files after the module
+  or behaviour they test, not after where the test came from (no `test_review_fixes.py`).
+- `pytest.mark.parametrize` for input tables, with readable ids.
+- Error tests check the message names the thing at fault, with `pytest.raises(..., match=...)` or
+  by asserting on `err.value`.
+- Floats: `pytest.approx` or `numpy.testing.assert_allclose` with an explicit tolerance; exact
+  equality only where the value is exact by construction.
+- Tests are deterministic and isolated: `tmp_path` for files, `monkeypatch` for environment, fixed
+  random seeds, no network, no dependence on test order.
+- Prefer fakes passed through a `Protocol` over `unittest.mock.patch` on your own code.
 
-## Deliberately not used
-- mypy/pyright: not set up yet; type hints are documentation plus ruff `UP`. Adding a checker
-  is a separate decision.
-- Logging framework: the CLI's stdout/stderr is enough for one-shot runs.
-- `unittest`-style test classes: plain functions and fixtures.
+## Dependencies and security
+- Declare dependencies in `pyproject.toml` with minimum versions and a comment on why each is
+  needed; keep dev tools in an optional `dev` group. Work in a virtual environment.
+- Add a dependency only when it earns its place; prefer the standard library.
+- Never put credentials in code, tests or logs; read them from the environment or the tool's
+  config file.
+- Don't use `eval`/`exec`, `pickle` on untrusted data, or `subprocess` with `shell=True`.
+
+## This project
+These rules are specific to `data-prep/` and override the general guidance above where they
+differ.
+
+- **Layout.** Package in `src/dataprep/`, one module per pipeline stage (`download`, `daily`,
+  `interpolate`, `write`, `publish`), `pipeline` joining them, `cli` as the only entry point.
+- **Errors.** Expected failures raise a subclass of `DataPrepError` (`RegistryError`,
+  `DataError`, `DownloadError`, `PublishError`). `cli.main` maps them to exit code 1 with
+  `error: ...` on stderr; bad arguments exit 2.
+- **Output.** The CLI prints to stdout/stderr; no `logging` setup yet (one-shot runs).
+- **Type checking.** No mypy/pyright yet; hints plus Ruff `UP`. Adding a checker is a separate
+  decision.
+- **Data flow.** `data/raw` → `data/processed` → (validated `publish`) → `data/pricer`. Only
+  `publish` writes to `data/pricer`. Data files are never committed.
+- **Parquet metadata** (station, observation windows, registry version) is checked by Java, so a
+  key rename is a cross-language change: update the spec and the Java loader together.
+- **ERA5.** Units, physics and time handling follow the `era5-data` skill and ADRs 0002, 0003
+  and 0005. Observation windows are whole UTC hours relative to D 00:00.
+- **Copernicus.** One request at a time; credentials only in `~/.cdsapirc`.
+- **Tests.** Synthetic ERA5 data and `FakeCdsClient` live in `tests/synth.py`; tests never
+  download and never read `data/`.
+- **Constants** that encode a rule carry a comment naming the spec or ADR (e.g.
+  `MAX_WINDOW_START_H`, ADR 0005).
