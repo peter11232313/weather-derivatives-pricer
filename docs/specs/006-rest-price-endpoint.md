@@ -225,3 +225,52 @@ Planner findings (`PLAN: READY`, owner OK 2026-11-26): only `BurnDto` and `Norma
 `PriceResponse` and `DetrendedDto`. Tests: `ApiTestSupport.assertBurn`/`assertNormal` and the
 nine `priceGbp` keys in `PriceEndpointPricingTest` switch name, values unchanged; a new
 recursive `assertNoFieldAnywhere` proves no `priceGbp` key remains. Reviewers: code + quant.
+
+## Amendment C — settlement currency, trend significance, normal-fit diagnostics (approved 2026-11-26)
+
+### Why
+Three quant-review findings (spec 006 re-review, 2026-11-24) that make the real London results
+readable once 1991–2023 is published:
+- Every amount is labelled GBP, but only London settles in GBP; a € city with a file would be
+  priced and reported as £.
+- With 10–30 seasons the fitted trend is often noise (London Jan: −0.077 ± 0.134 °C/yr), yet the
+  detrended prices look as firm as the plain ones.
+- The normal price assumes a symmetric index; shoulder-month indices can be skewed, and the
+  response gives no way to see it.
+
+### Scope
+In:
+- **Currency.** New property `pricer.settlement-currency.<city>=<ISO code>`; the default
+  configuration has `london=GBP`. A city not in the map → 404 `city_not_found`, message names the
+  city and the configured cities. Checked after the look-ahead guard and before `load()`, so an
+  unconfigured city never reads a file. Response gains top-level `"currency": "GBP"`.
+  Only `GBP` is accepted as a value for now (amount fields are named `…Gbp`); any other value fails
+  at startup naming the city. A € city needs a later amendment that renames the amount fields.
+- **Trend significance (library + API).** `DetrendedBurnResult.slopeTStat()` = slope / its
+  standard error, as `OptionalDouble`, empty when the standard error is 0;
+  `slopeSignificant()` = |t| ≥ `SIGNIFICANT_T_STAT` (2.0); when the standard error is 0,
+  significant iff the slope ≠ 0. JSON: `detrended.slopeTStat` (number or null) and
+  `detrended.slopeSignificant` (boolean).
+- **Normal-fit diagnostics (library + API).** `IndexDistributionResult.seasonCount()` and
+  `indexSkewness()`: adjusted Fisher–Pearson sample skewness
+  G1 = √(n(n−1)) / (n−2) · m3 / m2^{3/2}, with m_k = (1/n) Σ (x − x̄)^k over the settlement index
+  values the normal was fitted to (shifted values for the detrended normal); `OptionalDouble`,
+  empty when m2 = 0. JSON: `normal.seasonCount`, `normal.indexSkewness` (number or null), also
+  under `detrended.normal`.
+
+Out:
+- Non-GBP settlement, amount-field renames, a Java station registry (valid-but-wrong-city files).
+- Changing any price; a different significance test (t-distribution critical values); kernel
+  density or other skew-aware pricing.
+
+### Acceptance criteria
+- [ ] Given the default configuration and city `london`, then 200 and `"currency": "GBP"`; prices unchanged.
+- [ ] Given a city with a valid file but not in `pricer.settlement-currency`, then 404 `city_not_found` naming the city and the configured cities, and the file is not read.
+- [ ] Given an unconfigured city with an in-window target, then 400 look-ahead (amendment A order kept); given an unknown city with no file, still 404.
+- [ ] Given `pricer.settlement-currency.<city>` set to anything but `GBP` (e.g. `EUR`, `gbp`), then the application fails to start with a message naming the city and the value.
+- [ ] Given a detrended run, then `slopeTStat` = slope / standard error (tolerance 1e-12) and `slopeSignificant` is true iff |t| ≥ 2; at |t| exactly 2 it is true.
+- [ ] Given a perfectly linear trend (standard error 0), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
+- [ ] Given index values {0, 0, 0, 0, 10}, then `indexSkewness` = √5 (2.2360680, tolerance 1e-9) and `seasonCount` = 5; given a symmetric set, 0 (tolerance 1e-12); given σ = 0, empty/null.
+- [ ] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
+- [ ] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).
+- [ ] All tests green; README ("How to read the numbers": currency, t-stat, skewness), CHANGELOG, PROGRESS and the development log updated.
