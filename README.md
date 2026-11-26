@@ -222,10 +222,11 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
   `lastSeasonYear` are required. Optional: `capGbp`, `dailyHddDecimals`, `baseC` (default 18) and
   `targetSeasonYear`. Unknown fields and wrong types (e.g. `"400"`, `1.5` decimals, `"type": 1`)
   are rejected.
-- **Response:** each season's index and payoff, `burn` (price, standard error, payoff sd, min,
-  max, mean index) and `normal` (price, μ, σ). With `targetSeasonYear`, `detrended` adds the
-  slope and its standard error, the shifted seasons (with each season's mean temperature and
-  shift) and the detrended burn and normal prices; otherwise `"detrended": null`.
+- **Response:** each season's index and payoff, `burn` (expected payoff, standard error, payoff
+  sd, min, max, mean index) and `normal` (expected payoff, μ, σ). With `targetSeasonYear`,
+  `detrended` adds the slope and its standard error, the shifted seasons (with each season's mean
+  temperature and shift) and the detrended burn and normal expected payoffs; otherwise
+  `"detrended": null`.
 - **At least 5 seasons** (the normal model's minimum), and **10 with `targetSeasonYear`**.
 - **No look-ahead** (spec 006 amendment A): a `targetSeasonYear` inside
   `firstSeasonYear..lastSeasonYear` is a 400, checked before the data are read, because the
@@ -240,9 +241,10 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
 - The city file is read on every request, so a republished file is used without a restart.
 
 How to read the numbers:
-- Every `priceGbp` is an **undiscounted expected payoff with no risk loading**, not a quote.
-- `burn.stdErrorGbp` covers only the spread of past payoffs. The normal price does not include the
-  uncertainty of σ itself (about ±25% with 10 seasons).
+- Every `expectedPayoffGbp` (burn and normal, plain and detrended) is an **undiscounted expected
+  payoff with no risk loading**, not a quote. (Before spec 006 amendment B the field was `priceGbp`.)
+- `burn.stdErrorGbp` covers only the spread of past payoffs. The normal expected payoff does not
+  include the uncertainty of σ itself (about ±25% with 10 seasons).
 - The detrended standard errors leave out the uncertainty of the fitted slope; check
   `slopeStdErrDegCPerYear`.
 

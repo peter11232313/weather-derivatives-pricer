@@ -14,6 +14,10 @@
   with or without a cap. In-house normal CDF (Cody erfc); no new dependency.
 
 ### Changed
+- **Breaking** — pricer (spec 006 amendment B): `POST /price` renames `burn.priceGbp` and
+  `normal.priceGbp` (also under `detrended`) to `expectedPayoffGbp`. Both are undiscounted
+  expected payoffs with no risk loading, not quotable prices. No alias for the old name;
+  library names (`BurnResult.burnPriceGbp`) unchanged.
 - pricer (spec 006 amendment A): `POST /price` rejects a `targetSeasonYear` inside
   `firstSeasonYear..lastSeasonYear` with 400 `invalid_request` (look-ahead: the priced season
   fed its own trend fit and burn). Checked before the data are loaded. A target before the

@@ -7,6 +7,7 @@ import static com.weatherderivatives.pricer.api.ApiTestSupport.assertContains;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertDetrendedSeasons;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertError;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertMentionsNumber;
+import static com.weatherderivatives.pricer.api.ApiTestSupport.assertNoFieldAnywhere;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertNormal;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertOk;
 import static com.weatherderivatives.pricer.api.ApiTestSupport.assertSeasons;
@@ -120,7 +121,7 @@ class PriceEndpointPricingTest {
 
     // burn = 800 / 5 = 160; payoff sd = sqrt(4·160² + 640²)/2 = sqrt(512000/4) = 357.770876...
     JsonNode burn = r.get("burn");
-    assertEquals(160.0, num(burn, "priceGbp"), 1e-9);
+    assertEquals(160.0, num(burn, "expectedPayoffGbp"), 1e-9);
     assertEquals(Math.sqrt(128_000.0), num(burn, "payoffStdDevGbp"), 1e-9);
     assertEquals(Math.sqrt(128_000.0) / Math.sqrt(5.0), num(burn, "stdErrorGbp"), 1e-9);
     assertEquals(0.0, num(burn, "minPayoffGbp"), 1e-9);
@@ -129,7 +130,7 @@ class PriceEndpointPricingTest {
 
     // μ = 400, σ = sqrt(3200 / 4) = 28.284271; call at the money: 20 · σ · φ(0) = 225.675833
     JsonNode normal = r.get("normal");
-    assertEquals(225.675833, num(normal, "priceGbp"), PRICE_TOL);
+    assertEquals(225.675833, num(normal, "expectedPayoffGbp"), PRICE_TOL);
     assertEquals(400.0, num(normal, "meanIndexHddDegC"), 1e-9);
     assertEquals(28.284271, num(normal, "sdIndexHddDegC"), PRICE_TOL);
 
@@ -143,11 +144,11 @@ class PriceEndpointPricingTest {
     req.put("strikeHddDegC", 390.0);
     JsonNode r = assertOk(postPrice(mvc, req));
 
-    assertEquals(200.0, num(r.get("burn"), "priceGbp"), 1e-9);
+    assertEquals(200.0, num(r.get("burn"), "expectedPayoffGbp"), 1e-9);
     assertEquals(0.0, num(r.get("burn"), "payoffStdDevGbp"), 0.0);
     assertEquals(400.0, num(r.get("normal"), "meanIndexHddDegC"), 0.0);
     assertEquals(0.0, num(r.get("normal"), "sdIndexHddDegC"), 0.0);
-    assertEquals(200.0, num(r.get("normal"), "priceGbp"), 1e-9);
+    assertEquals(200.0, num(r.get("normal"), "expectedPayoffGbp"), 1e-9);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -192,9 +193,9 @@ class PriceEndpointPricingTest {
     assertBurn(lib.burn(), d.get("burn"));
     assertNormal(libNormal, d.get("normal"));
     // shifted indices 155/217 -> four payoffs of 17,000 -> detrended burn 6,800 (spec 004 AC2)
-    assertEquals(6_800.0, num(d.get("burn"), "priceGbp"), 1e-6);
+    assertEquals(6_800.0, num(d.get("burn"), "expectedPayoffGbp"), 1e-6);
     // spec 005 AC9: detrended normal 5,972.591120
-    assertEquals(5_972.591120, num(d.get("normal"), "priceGbp"), PRICE_TOL);
+    assertEquals(5_972.591120, num(d.get("normal"), "expectedPayoffGbp"), PRICE_TOL);
 
     // the top level stays the un-detrended analysis of the same seasons
     IndexDistributionResult raw = IndexDistributionAnalysis.run(call, temps, 2001, 2010);
@@ -401,7 +402,7 @@ class PriceEndpointPricingTest {
   void ac11_republishedFile_nextRequestUsesIt() throws Exception {
     writeCity(dataDir(), "repub", ApiTestSupport.workedExampleDays());
     JsonNode before = assertOk(postPrice(mvc, workedExampleRequest("repub")));
-    assertEquals(160.0, num(before.get("burn"), "priceGbp"), 1e-9);
+    assertEquals(160.0, num(before.get("burn"), "expectedPayoffGbp"), 1e-9);
 
     // republish: five seasons of 440 -> every payoff 20 · 40 = 800, σ = 0 -> both prices 800.
     // Written beside the folder, then moved in (Windows may lock a file still memory-mapped).
@@ -413,8 +414,44 @@ class PriceEndpointPricingTest {
     Files.move(staged, dataDir().resolve("repub.parquet"), StandardCopyOption.REPLACE_EXISTING);
 
     JsonNode after = assertOk(postPrice(mvc, workedExampleRequest("repub")));
-    assertEquals(800.0, num(after.get("burn"), "priceGbp"), 1e-9);
-    assertEquals(800.0, num(after.get("normal"), "priceGbp"), 1e-9);
+    assertEquals(800.0, num(after.get("burn"), "expectedPayoffGbp"), 1e-9);
+    assertEquals(800.0, num(after.get("normal"), "expectedPayoffGbp"), 1e-9);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Amendment B: priceGbp renamed expectedPayoffGbp (clean break, no alias)
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void amendmentB_validRequest_noTarget_hasExpectedPayoffGbp_andNoPriceGbpAnywhere()
+      throws Exception {
+    JsonNode r = assertOk(postPrice(mvc, workedExampleRequest("london")));
+    assertNoFieldAnywhere(r, "priceGbp");
+
+    // worked example (AC1): burn 800 / 5 = 160; normal 20 · 28.284271 · φ(0) = 225.675833
+    assertEquals(160.0, num(r.get("burn"), "expectedPayoffGbp"), 1e-9);
+    assertEquals(225.675833, num(r.get("normal"), "expectedPayoffGbp"), PRICE_TOL);
+  }
+
+  @Test
+  void amendmentB_validRequest_withTarget_detrendedHasExpectedPayoffGbp_andNoPriceGbpAnywhere()
+      throws Exception {
+    Map<String, Object> req = workedExampleRequest("trend");
+    req.put("strikeHddDegC", 200.0);
+    req.put("tickGbpPerDegC", 1000.0);
+    req.put("firstSeasonYear", 2001);
+    req.put("lastSeasonYear", 2010);
+    req.put("targetSeasonYear", 2011);
+    JsonNode r = assertOk(postPrice(mvc, req));
+
+    JsonNode d = r.get("detrended");
+    assertNotNull(d, "missing detrended");
+    assertTrue(d.isObject(), () -> "detrended: " + d);
+    // covers top level, burn, normal, detrended.burn, detrended.normal and the season arrays
+    assertNoFieldAnywhere(r, "priceGbp");
+    // spec 004 AC2: detrended burn 6,800; spec 005 AC9: detrended normal 5,972.591120
+    assertEquals(6_800.0, num(d.get("burn"), "expectedPayoffGbp"), 1e-6);
+    assertEquals(5_972.591120, num(d.get("normal"), "expectedPayoffGbp"), PRICE_TOL);
   }
 
   // ---------------------------------------------------------------------------------------------

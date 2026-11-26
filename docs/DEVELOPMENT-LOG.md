@@ -211,6 +211,15 @@ Contents
 | 5h.3 | One existing test row (CALL 2001..2010, target 2001) became invalid. | Owner OK: input changed to 2000 (before the window); assertion unchanged. |
 | 5h.4 | `assertMentionsNumber` ignores a number right after `.`, so "2001..2010" would miss 2010. | New test uses a digit-boundary helper; the "e.g. 2011" hint cannot satisfy it. |
 
+## 5i. Spec 006 amendment B — `priceGbp` renamed `expectedPayoffGbp`
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5i.1 | quant (spec 006 re-review): `priceGbp` suggests a quotable price, but burn and normal are undiscounted expected payoffs with no risk loading. | Owner OK: rename the JSON field to `expectedPayoffGbp` (the index-distribution library's name). Clean break, no alias: localhost-only API, no outside clients, no version yet; CHANGELOG marks it breaking. |
+| 5i.2 | Rename the library too (`BurnResult.burnPriceGbp`)? | No: "burn price" is the market term for the historical mean payoff, and the amendment is JSON-only. The library-side local `priceGbp` in `IndexDistributionAnalysis` and the README library snippet stay. |
+| 5i.3 | Changing test keys could look like editing tests to pass. | Owner OK beforehand: key renames only, expected values and tolerances unchanged; a recursive `assertNoFieldAnywhere` (with its own `AssertNoFieldAnywhereTest` so it cannot pass vacuously) proves no `priceGbp` remains, including under `detrended`. Red run: 22 failures, all on the old key. |
+| 5i.4 | code-reviewer round 1 blocked on PROGRESS and this log not yet updated (AC4). | Done in wrap-up; README "normal price" wording aligned too. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.

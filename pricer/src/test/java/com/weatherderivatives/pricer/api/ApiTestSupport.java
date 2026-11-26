@@ -237,6 +237,35 @@ final class ApiTestSupport {
     return new TreeSet<>(node.propertyNames());
   }
 
+  /**
+   * Fails if any object at any depth under {@code node} (including {@code node} itself and objects
+   * inside arrays) has a property called {@code fieldName}; the message names the JSON path.
+   */
+  static void assertNoFieldAnywhere(JsonNode node, String fieldName) {
+    assertNotNull(node, "node is null");
+    List<String> paths = new ArrayList<>();
+    collectFieldPaths(node, fieldName, "$", paths);
+    assertTrue(
+        paths.isEmpty(), () -> "unexpected field " + fieldName + " at " + paths + " in " + node);
+  }
+
+  private static void collectFieldPaths(
+      JsonNode node, String fieldName, String path, List<String> out) {
+    if (node.isObject()) {
+      for (String name : node.propertyNames()) {
+        String child = path + "." + name;
+        if (name.equals(fieldName)) {
+          out.add(child);
+        }
+        collectFieldPaths(node.get(name), fieldName, child, out);
+      }
+    } else if (node.isArray()) {
+      for (int k = 0; k < node.size(); k++) {
+        collectFieldPaths(node.get(k), fieldName, path + "[" + k + "]", out);
+      }
+    }
+  }
+
   /** The JSON number at {@code node.field}; fails if it is missing or not a number. */
   static double num(JsonNode node, String field) {
     JsonNode value = node.get(field);
@@ -265,14 +294,14 @@ final class ApiTestSupport {
     assertNotNull(burn, "missing burn");
     assertEquals(
         Set.of(
-            "priceGbp",
+            "expectedPayoffGbp",
             "stdErrorGbp",
             "payoffStdDevGbp",
             "minPayoffGbp",
             "maxPayoffGbp",
             "meanIndexHddDegC"),
         fieldNames(burn));
-    assertEquals(expected.burnPriceGbp(), num(burn, "priceGbp"), "burn.priceGbp");
+    assertEquals(expected.burnPriceGbp(), num(burn, "expectedPayoffGbp"), "burn.expectedPayoffGbp");
     assertEquals(expected.burnPriceStdErrorGbp(), num(burn, "stdErrorGbp"), "burn.stdErrorGbp");
     assertEquals(expected.payoffStdDevGbp(), num(burn, "payoffStdDevGbp"), "burn.payoffStdDevGbp");
     assertEquals(expected.minPayoffGbp(), num(burn, "minPayoffGbp"), "burn.minPayoffGbp");
@@ -284,8 +313,10 @@ final class ApiTestSupport {
   /** Asserts a normal object equals the library index-distribution result exactly. */
   static void assertNormal(IndexDistributionResult expected, JsonNode normal) {
     assertNotNull(normal, "missing normal");
-    assertEquals(Set.of("priceGbp", "meanIndexHddDegC", "sdIndexHddDegC"), fieldNames(normal));
-    assertEquals(expected.expectedPayoffGbp(), num(normal, "priceGbp"), "normal.priceGbp");
+    assertEquals(
+        Set.of("expectedPayoffGbp", "meanIndexHddDegC", "sdIndexHddDegC"), fieldNames(normal));
+    assertEquals(
+        expected.expectedPayoffGbp(), num(normal, "expectedPayoffGbp"), "normal.expectedPayoffGbp");
     assertEquals(
         expected.meanIndexHddDegC(), num(normal, "meanIndexHddDegC"), "normal.meanIndexHddDegC");
     assertEquals(expected.sdIndexHddDegC(), num(normal, "sdIndexHddDegC"), "normal.sdIndexHddDegC");

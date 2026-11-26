@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 2026-11-24_
+_Last updated: 2026-11-26_
 
 ## Done
 - **Spec 001 — HDD index engine**: merged to `main` via [PR #1](https://github.com/peter11232313/weather-derivatives-pricer/pull/1) (`733d5f3`). CI green on Linux.
@@ -49,6 +49,9 @@ _Last updated: 2026-11-24_
 - **Spec 006 amendment A — look-ahead guard**: merged to `main` via [PR #18](https://github.com/peter11232313/weather-derivatives-pricer/pull/18) (`7e365e6`). Reviewed by `code-reviewer` and `quant-reviewer`: both `VERDICT: PASS` in round 1; quant SHOULD fixed (target before the window is a hindcast, not a walk-forward back-test; README `+2` note for long periods).
   - `POST /price` rejects `firstSeasonYear ≤ targetSeasonYear ≤ lastSeasonYear` with 400 (before `load()`); target before the window allowed; library unchanged. One test input changed (CALL row target 2001 → 2000, owner OK).
   - 414 Java tests green (5 new); spotless + javadoc clean; 7/7 criteria ticked.
+- **Spec 006 amendment B — `priceGbp` renamed `expectedPayoffGbp`**: on branch `feat/006b-expected-payoff-name` (PR pending).
+  - JSON only, **breaking**, no alias: `burn`/`normal` (also under `detrended`) now send `expectedPayoffGbp`; library names unchanged (`BurnResult.burnPriceGbp`).
+  - 423 Java tests green (9 new: 2 endpoint + 7 for the recursive `assertNoFieldAnywhere`); spotless + javadoc clean; 4/4 criteria ticked.
 - **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.
 
 ## Next
@@ -73,7 +76,7 @@ _Last updated: 2026-11-24_
 - Loader checks only the form of the windows; a valid-but-wrong-city file loads (needs a Java station registry).
 - quant SHOULD: responses are labelled GBP for any city with a file; non-London contracts settle in €. Restrict to London or add a currency from the station registry.
 - quant SHOULD: normal price has no fit diagnostics (n, skewness); shoulder months may be skewed.
-- ~~Both: in-window `targetSeasonYear` accepted silently~~ → spec 006 amendment A (400). Quant: rename `priceGbp` → `expectedPayoffGbp`; flag detrended prices when |b|/SE(b) < 2. Met: should the response show the last ERA5-final (non-ERA5T) date?
+- ~~Both: in-window `targetSeasonYear` accepted silently~~ → spec 006 amendment A (400). ~~Quant: rename `priceGbp` → `expectedPayoffGbp`~~ → spec 006 amendment B. Quant: flag detrended prices when |b|/SE(b) < 2. Met: should the response show the last ERA5-final (non-ERA5T) date?
 - code NITs: spec says the 404 message names the path but the API names the city only (better; amend the spec); 422 bodies include the full file path.
 
 **Repo housekeeping**
