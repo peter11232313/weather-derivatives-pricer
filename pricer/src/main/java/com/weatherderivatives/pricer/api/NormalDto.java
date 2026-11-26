@@ -1,10 +1,11 @@
 package com.weatherderivatives.pricer.api;
 
 /**
- * Normal-model price.
+ * Normal-model expected payoff.
  *
- * @param priceGbp expected payoff under the fitted normal, GBP
+ * @param expectedPayoffGbp expected payoff under the fitted normal, undiscounted, no risk loading,
+ *     GBP
  * @param meanIndexHddDegC fitted mean, °C·day
  * @param sdIndexHddDegC fitted standard deviation, °C·day
  */
-public record NormalDto(double priceGbp, double meanIndexHddDegC, double sdIndexHddDegC) {}
+public record NormalDto(double expectedPayoffGbp, double meanIndexHddDegC, double sdIndexHddDegC) {}

@@ -10,7 +10,7 @@ import java.util.List;
  * @param slopeStdErrDegCPerYear standard error of the slope, °C per year
  * @param seasons shifted seasons in year order
  * @param burn detrended burn
- * @param normal detrended normal-model price
+ * @param normal detrended normal-model expected payoff
  */
 public record DetrendedDto(
     int targetSeasonYear,

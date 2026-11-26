@@ -8,7 +8,7 @@ import java.util.List;
  * @param city city name
  * @param seasons seasons in year order
  * @param burn burn summary
- * @param normal normal-model price
+ * @param normal normal-model expected payoff
  * @param detrended detrended results, or null without a target season
  */
 public record PriceResponse(
