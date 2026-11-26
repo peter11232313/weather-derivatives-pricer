@@ -23,8 +23,11 @@ rules E F W I UP B D, Google docstrings; `ruff check --fix && ruff format`). Pyt
 - `Any` only at untyped third-party boundaries (the CDS client), never in our own data types.
 
 ## Errors
-- Raise a subclass of `DataPrepError` (`RegistryError`, `DataError`, `DownloadError`,
-  `PublishError`). The message names the entry, date, timestamp or path.
+- Bad data, files or downloads raise a subclass of `DataPrepError` (`RegistryError`,
+  `DataError`, `DownloadError`, `PublishError`). The message names the entry, date, timestamp or
+  path.
+- A caller passing an invalid argument (a bug, not bad data) raises `ValueError`, documented
+  under `Raises:` (e.g. `year_chunks`, `write_parquet`).
 - Never return NaN-padded or partial data in place of an error. Check completeness (hours, days,
   metadata) before writing.
 - `cli.main` maps `DataPrepError` to exit code 1 with `error: ...` on stderr; bad arguments are
@@ -51,8 +54,8 @@ rules E F W I UP B D, Google docstrings; `ruff check --fix && ruff format`). Pyt
   fakes in `tests/synth.py`. Tests never download and never read `data/`.
 - Names describe behaviour: `test_<unit>_<condition>_<result>`, e.g.
   `test_cli_publish_missing_file_exits_1_with_message_on_stderr`.
-- `pytest.mark.parametrize` for input tables; `pytest.raises(..., match=...)` checks the message
-  names the thing at fault.
+- `pytest.mark.parametrize` for input tables. An error test checks that the message names the
+  thing at fault, with `pytest.raises(..., match=...)` or by asserting on `err.value`.
 - Floats: `pytest.approx` or `numpy.testing.assert_allclose` with an explicit tolerance;
   bit-for-bit (`==`) only where the spec says the value must survive a round trip.
 - `monkeypatch` for environment and module seams; prefer passing a fake through a `Protocol`.

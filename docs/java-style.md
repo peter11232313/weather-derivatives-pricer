@@ -7,7 +7,8 @@ Formatting is google-java-format via Spotless (`./gradlew spotlessApply`); don't
 ## Types and values
 - Value types are `record`s. The compact constructor validates: `Objects.requireNonNull(x, "x")`,
   then `IllegalArgumentException` whose message names the field and the bad value.
-- Records copy collection inputs (`List.copyOf`). Nothing public returns a mutable collection.
+- Library records copy collection inputs (`List.copyOf`, `Map.copyOf`). API DTOs are built from
+  fresh lists in `PriceService` and never shared. Nothing public returns a mutable collection.
 - Stateless library code is a `final class` with a private constructor and static methods.
 - No `null` in the library API. Optional terms use `OptionalDouble` / `OptionalInt` /
   `Optional<T>`; `null` is only allowed in JSON DTOs (`"detrended": null`).
@@ -28,10 +29,14 @@ Formatting is google-java-format via Spotless (`./gradlew spotlessApply`); don't
 ## Tests
 - JUnit 6, no mocking library. Fakes are hand-written (`TemperatureSource` lambda,
   `@TestConfiguration`).
-- Method names are `acN_condition_expectedResult` and map to spec criteria; parameterized tests
-  set `name = "[{index}] ..."`.
-- Files go in `@TempDir`; never read `data/`. Assert exact values with an explicit tolerance;
-  a known-answer test states where the number comes from.
+- Method names are `condition_expectedResult`. A test that proves a spec criterion is prefixed
+  with it: `ac5_...`, or `amendmentA_...` for an amendment's criteria.
+- Parameterized tests set `name = "[{index}] ..."` when the default display would not say which
+  case failed.
+- Files go in `@TempDir`; never read `data/`. A known-answer test states where the number comes
+  from.
+- Doubles are compared with an explicit tolerance, except values exact by construction:
+  constants, zero, a decimal-rounded result, or a round trip that must be bit-for-bit.
 
 ## Spring Boot (`api` package only)
 - Spring stays in `pricer.api`. `contract`, `index`, `model` and `data` import no Spring and stay
