@@ -228,6 +228,7 @@ CELL_LATS, CELL_LONS = [51.25, 51.5], [-0.5, -0.25]
 
 
 def static_linear_field(lats=LONDON_LATS, lons=LONDON_LONS):
+    """linear_c(lat, lon) at a single hour (degrees C); unlike ``linear_field``, no time trend."""
     lat2, lon2 = np.meshgrid(lats, lons, indexing="ij")
     return field_c(linear_c(lat2, lon2), lats, lons)
 
