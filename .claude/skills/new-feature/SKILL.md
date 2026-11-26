@@ -10,7 +10,9 @@ description: End-to-end workflow for implementing a feature from a spec in docs/
    If its first line is `PLAN: QUESTIONS (n)` (or the line is missing or malformed),
    show me the questions first and re-run the planner with my answers.
 3. **Branch** — `git switch -c feat/<spec-number>-<slug>`.
-4. **Tests first** — delegate to `test-writer`. Confirm the new tests fail.
+4. **Tests first** — delegate to `test-writer`. Read its first line: `TESTS: RED (n)` → confirm
+   the new tests fail yourself; `TESTS: BLOCKED` (or a missing or malformed line) → show me why
+   and stop.
 5. **Implement** — smallest change per plan step; run tests after each; commit
    each green step with a conventional commit message.
 6. **Review (loop)** — delegate to `code-reviewer`, plus every domain reviewer the
