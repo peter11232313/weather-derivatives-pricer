@@ -765,7 +765,7 @@ def test_b9_publish_rejects_missing_or_invalid_window_metadata(
         assert key in message
     with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
-    assert "london.parquet" in str(err.value)
+    assert str(processed_dir / "london.parquet") in str(err.value)
     assert list(pricer_dir.iterdir()) == []
 
 

@@ -43,3 +43,4 @@ def test_repo_root_outside_a_checkout_is_an_error(tmp_path, monkeypatch):
     with pytest.raises(DataPrepError) as err:
         dataprep.paths.repo_root()
     assert "cannot find the repository" in str(err.value)
+    assert str(fake) in str(err.value)

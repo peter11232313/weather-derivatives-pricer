@@ -278,7 +278,7 @@ def test_invalid_file_is_not_published_and_existing_file_kept(processed_dir, pri
     build(processed_dir / "london.parquet")
     with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
-    assert "london.parquet" in str(err.value)
+    assert str(processed_dir / "london.parquet") in str(err.value)
     assert snapshot(pricer_dir) == before
     assert existing.read_bytes() == before["london.parquet"]
 
@@ -288,7 +288,7 @@ def test_invalid_file_into_empty_pricer_dir_leaves_it_empty(processed_dir, price
     build(processed_dir / "london.parquet")
     with pytest.raises(PublishError) as err:
         publish("london", processed_dir, pricer_dir)
-    assert "london.parquet" in str(err.value)
+    assert str(processed_dir / "london.parquet") in str(err.value)
     assert list(pricer_dir.iterdir()) == []
 
 

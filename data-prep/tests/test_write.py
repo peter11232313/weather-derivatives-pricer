@@ -89,7 +89,7 @@ def test_missing_metadata_key_raises_and_writes_nothing(tmp_path, missing):
     meta = {k: v for k, v in METADATA.items() if k != missing}
     with pytest.raises(ValueError) as err:
         write_parquet(out_dir / "london.parquet", leap_series(), meta)
-    assert missing in str(err.value)
+    assert str(err.value).endswith(f": {missing}")
     assert list(out_dir.iterdir()) == []
 
 

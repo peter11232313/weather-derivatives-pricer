@@ -110,6 +110,7 @@ def test_zip_response_is_an_error_and_leaves_no_file(raw_dir, london):
     with pytest.raises(DownloadError) as err:
         download_year(client, london, 2024, raw_dir)
     assert "era5_london_2024" in str(err.value)
+    assert "zip" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 
@@ -154,6 +155,7 @@ def test_lsm_zip_response_is_an_error(raw_dir, london):
     with pytest.raises(DownloadError) as err:
         download_lsm(FakeCdsClient(mode="zip"), london, raw_dir)
     assert "era5_lsm_london" in str(err.value)
+    assert "zip" in str(err.value)
     assert list(raw_dir.iterdir()) == []
 
 
