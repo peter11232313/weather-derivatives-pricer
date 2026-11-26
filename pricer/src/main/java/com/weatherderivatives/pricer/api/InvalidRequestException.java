@@ -1,6 +1,6 @@
 package com.weatherderivatives.pricer.api;
 
-/** A request is invalid before any library call (e.g. a missing field); mapped to 400. */
+/** A client error in the request (a missing field or a term the library rejects); mapped to 400. */
 public final class InvalidRequestException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
