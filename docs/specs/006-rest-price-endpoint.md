@@ -269,7 +269,7 @@ Out:
 - [x] Given an unconfigured city with an in-window target, then 400 look-ahead (amendment A order kept); given an unknown city with no file, still 404.
 - [x] Given `pricer.settlement-currency.<city>` set to anything but `GBP` (e.g. `EUR`, `gbp`), then the application fails to start with a message naming the city and the value.
 - [x] Given a detrended run, then `slopeTStat` = slope / standard error (tolerance 1e-12) and `slopeSignificant` is true iff |t| ≥ 2; at |t| exactly 2 it is true.
-- [x] Given a perfectly linear trend (standard error 0), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
+- [x] Given a perfectly linear trend (standard error 0, or ≤ 1e-12·|slope| from rounding), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
 - [x] Given index values {0, 0, 0, 0, 10}, then `indexSkewness` = √5 (2.2360680, tolerance 1e-9) and `seasonCount` = 5; given a symmetric set, 0 (tolerance 1e-12); given σ = 0, empty/null.
 - [x] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
 - [x] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).

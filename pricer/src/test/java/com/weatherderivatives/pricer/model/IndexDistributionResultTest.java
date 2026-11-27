@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalDouble;
 import org.junit.jupiter.api.Test;
@@ -75,9 +76,9 @@ class IndexDistributionResultTest {
     // review round 1: sum / n can land 1 ulp off for such values, so every deviation is a tiny
     // non-zero number and G1 would come out near ±1 instead of empty (sd is 0 for them).
     double[] equal456 = new double[9];
-    java.util.Arrays.fill(equal456, 456.1);
+    Arrays.fill(equal456, 456.1);
     double[] equalTenth = new double[10];
-    java.util.Arrays.fill(equalTenth, 0.1);
+    Arrays.fill(equalTenth, 0.1);
 
     IndexDistributionResult a = result(equal456);
     IndexDistributionResult b = result(equalTenth);

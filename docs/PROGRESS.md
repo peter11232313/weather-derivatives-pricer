@@ -55,7 +55,7 @@ _Last updated: 2026-11-26_
 - **Spec 006 amendment C — settlement currency, trend t-stat, normal skewness**: on branch `feat/006c-currency-trend-diagnostics` (PR pending; built in worktree `../wdp-007`).
   - `pricer.settlement-currency.<city>` (default `london=GBP`, only GBP accepted); unconfigured city → 404 before any file is read; response `currency`.
   - `detrended.slopeTStat` / `slopeSignificant` (|t| ≥ 2, rule of thumb); `normal.seasonCount` / `indexSkewness` (G1), plain and detrended. Prices unchanged.
-  - 459 Java tests green (45 new); spotless + javadoc clean; 10/10 criteria ticked. Review round 1: code BLOCKED on float equality for skewness (fixed test-first), quant PASS.
+  - 459 Java tests green (45 new); spotless + javadoc clean; 10/10 criteria ticked. Review round 1: code BLOCKED on float equality for skewness (fixed test-first), quant PASS with SHOULDs (fixed). Round 2: both `VERDICT: PASS`.
 - **London 1991-01-02..2001-12-30 published (2026-11-21)** with the 09–09 windows from the years downloaded so far: 4,016 rows, 9 midpoint days. 10 seasons, tick £20, 1 dp: Jan call K400 burn £436 (se £178), normal £456; Nov–Mar call K1800 burn £1,458 (se £509), normal £1,482. Detrended slopes not significant (Jan −0.077 ± 0.134 °C/yr); a 2026 target extrapolates noise.
 
 ## Next

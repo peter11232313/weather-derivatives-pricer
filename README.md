@@ -261,7 +261,8 @@ How to read the numbers:
   the detrended price is about as uncertain as the plain one; their difference may mean nothing.
 - `indexSkewness` is the sample skewness (adjusted Fisher–Pearson G1) of the index values the
   normal was fitted to (the shifted ones for `detrended.normal`). G1 > 0 is a long tail of cold
-  seasons, so the normal model underprices out-of-the-money calls; G1 < 0 the reverse. Its own
+  seasons, so the normal model underprices far out-of-the-money calls (and overprices far
+  out-of-the-money puts); G1 < 0 the reverse. Its own
   standard error is about √(6/n) (0.77 at 10 seasons, 0.45 at 30), so only |G1| above about 1 says
   much. `null` when all values are equal or there are fewer than 3 seasons.
 
