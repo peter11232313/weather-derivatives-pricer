@@ -14,4 +14,13 @@ public final class CityNotFoundException extends RuntimeException {
   public CityNotFoundException(String message, Throwable cause) {
     super(message, cause);
   }
+
+  /**
+   * Creates the exception for a city that is not configured (spec 006 amendment C).
+   *
+   * @param message names the city and the configured cities
+   */
+  public CityNotFoundException(String message) {
+    super(message);
+  }
 }
