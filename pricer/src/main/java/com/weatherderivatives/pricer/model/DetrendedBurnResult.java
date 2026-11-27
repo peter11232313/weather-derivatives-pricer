@@ -27,6 +27,12 @@ public record DetrendedBurnResult(
   public static final double SIGNIFICANT_T_STAT = 2.0;
 
   /**
+   * A standard error at most this fraction of {@code |slope|} is rounding noise around an exactly
+   * linear history (decimal season means leave residuals near 1e-15), so it is treated as 0.
+   */
+  static final double EXACT_TREND_RELATIVE_SE = 1e-12;
+
+  /**
    * Copies {@code seasons} into an unmodifiable list.
    *
    * @throws NullPointerException if {@code burn}, {@code seasons} or any element is null
@@ -70,12 +76,13 @@ public record DetrendedBurnResult(
   /**
    * Returns the slope's t-statistic, {@code slope / standard error} (spec 006 amendment C).
    *
-   * @return the t-statistic, or empty when the standard error is 0 (an exactly linear history) or
-   *     NaN (fewer than 3 seasons)
+   * @return the t-statistic, or empty when the history is exactly linear (standard error 0, or at
+   *     most 1e-12 of {@code |slope|}, i.e. rounding noise) or the standard error is NaN (fewer
+   *     than 3 seasons)
    */
   public OptionalDouble slopeTStat() {
     double stdErr = slopeStdErrDegCPerYear();
-    if (Double.isNaN(stdErr) || stdErr == 0.0) {
+    if (Double.isNaN(stdErr) || isExactTrend(stdErr)) {
       return OptionalDouble.empty();
     }
     return OptionalDouble.of(slopeDegCPerYear / stdErr);
@@ -83,8 +90,9 @@ public record DetrendedBurnResult(
 
   /**
    * Returns whether the fitted trend is distinguishable from noise: {@code |t| ≥} {@value
-   * #SIGNIFICANT_T_STAT} (spec 006 amendment C). With a standard error of 0 the trend is
-   * significant iff the slope is not 0; with fewer than 3 seasons (no standard error) it is not.
+   * #SIGNIFICANT_T_STAT} (spec 006 amendment C). For an exactly linear history (see {@link
+   * #slopeTStat()}) the trend is significant iff the slope is not 0; with fewer than 3 seasons (no
+   * standard error) it is not.
    *
    * @return true if the slope is significant by this rule of thumb
    */
@@ -93,9 +101,13 @@ public record DetrendedBurnResult(
     if (Double.isNaN(stdErr)) {
       return false;
     }
-    if (stdErr == 0.0) {
+    if (isExactTrend(stdErr)) {
       return slopeDegCPerYear != 0.0;
     }
     return Math.abs(slopeDegCPerYear / stdErr) >= SIGNIFICANT_T_STAT;
+  }
+
+  private boolean isExactTrend(double stdErr) {
+    return stdErr <= EXACT_TREND_RELATIVE_SE * Math.abs(slopeDegCPerYear);
   }
 }

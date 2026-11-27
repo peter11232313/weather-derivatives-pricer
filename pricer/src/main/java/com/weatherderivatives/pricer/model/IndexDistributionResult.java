@@ -48,9 +48,17 @@ public record IndexDistributionResult(
     if (n < 3) {
       return OptionalDouble.empty();
     }
+    // Same rule as the fit's sd = 0: compare the inputs exactly, because sum / n can be 1 ulp off
+    // and leave tiny non-zero deviations that would give a meaningless G1 near ±1.
+    double first = seasons.get(0).indexHddDegC();
+    boolean allEqual = true;
     double sum = 0.0;
     for (SeasonOutcome s : seasons) {
+      allEqual &= s.indexHddDegC() == first;
       sum += s.indexHddDegC();
+    }
+    if (allEqual) {
+      return OptionalDouble.empty();
     }
     double mean = sum / n;
     double m2 = 0.0;

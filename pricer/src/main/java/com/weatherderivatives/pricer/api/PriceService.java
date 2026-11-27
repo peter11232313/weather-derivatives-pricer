@@ -168,7 +168,9 @@ public class PriceService {
           "no settlement currency configured for city: "
               + city
               + "; configured cities: "
-              + String.join(", ", new TreeSet<>(settlementCurrency.keySet())));
+              + (settlementCurrency.isEmpty()
+                  ? "(none)"
+                  : String.join(", ", new TreeSet<>(settlementCurrency.keySet()))));
     }
     return currency;
   }
