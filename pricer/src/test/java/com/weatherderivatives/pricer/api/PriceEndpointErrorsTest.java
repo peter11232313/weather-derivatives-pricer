@@ -60,6 +60,10 @@ class PriceEndpointErrorsTest {
   @DynamicPropertySource
   static void dataDirProperty(DynamicPropertyRegistry registry) {
     registry.add("pricer.data-dir", () -> dataDir().toString());
+    // spec 006 amendment C: fixture cities settle in GBP (london=GBP comes from the defaults)
+    for (String city : List.of("gappy", "hot", "frozen", "garbage", "notmin", "nowindow")) {
+      registry.add("pricer.settlement-currency." + city, () -> "GBP");
+    }
   }
 
   @BeforeAll

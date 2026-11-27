@@ -81,6 +81,10 @@ class PriceEndpointPricingTest {
   @DynamicPropertySource
   static void dataDirProperty(DynamicPropertyRegistry registry) {
     registry.add("pricer.data-dir", () -> dataDir().toString());
+    // spec 006 amendment C: fixture cities settle in GBP (london=GBP comes from the defaults)
+    for (String city : List.of("trend", "winter", "flat", "repub")) {
+      registry.add("pricer.settlement-currency." + city, () -> "GBP");
+    }
   }
 
   @BeforeAll
@@ -105,7 +109,8 @@ class PriceEndpointPricingTest {
       throws Exception {
     JsonNode r = assertOk(postPrice(mvc, workedExampleRequest("london")));
 
-    assertEquals(Set.of("city", "seasons", "burn", "normal", "detrended"), fieldNames(r));
+    assertEquals(
+        Set.of("city", "currency", "seasons", "burn", "normal", "detrended"), fieldNames(r));
     assertEquals("london", r.get("city").asString());
 
     // indices 360, 400, 400, 400, 440 in year order; call K=400 tick 20 -> payoffs 0,0,0,0,800
@@ -180,6 +185,8 @@ class PriceEndpointPricingTest {
             "targetSeasonYear",
             "slopeDegCPerYear",
             "slopeStdErrDegCPerYear",
+            "slopeTStat",
+            "slopeSignificant",
             "seasons",
             "burn",
             "normal"),

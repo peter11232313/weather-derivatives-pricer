@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
@@ -310,16 +311,35 @@ final class ApiTestSupport {
         expected.meanIndexHddDegC(), num(burn, "meanIndexHddDegC"), "burn.meanIndexHddDegC");
   }
 
-  /** Asserts a normal object equals the library index-distribution result exactly. */
+  /**
+   * Asserts a normal object equals the library index-distribution result exactly, including the
+   * spec 006 amendment C diagnostics ({@code indexSkewness} is JSON null when the library's is
+   * empty).
+   */
   static void assertNormal(IndexDistributionResult expected, JsonNode normal) {
     assertNotNull(normal, "missing normal");
     assertEquals(
-        Set.of("expectedPayoffGbp", "meanIndexHddDegC", "sdIndexHddDegC"), fieldNames(normal));
+        Set.of(
+            "expectedPayoffGbp",
+            "meanIndexHddDegC",
+            "sdIndexHddDegC",
+            "seasonCount",
+            "indexSkewness"),
+        fieldNames(normal));
     assertEquals(
         expected.expectedPayoffGbp(), num(normal, "expectedPayoffGbp"), "normal.expectedPayoffGbp");
     assertEquals(
         expected.meanIndexHddDegC(), num(normal, "meanIndexHddDegC"), "normal.meanIndexHddDegC");
     assertEquals(expected.sdIndexHddDegC(), num(normal, "sdIndexHddDegC"), "normal.sdIndexHddDegC");
+    JsonNode seasonCount = normal.get("seasonCount");
+    assertTrue(seasonCount.isIntegralNumber(), () -> "normal.seasonCount: " + normal);
+    assertEquals(expected.seasonCount(), seasonCount.asInt(), "normal.seasonCount");
+    OptionalDouble skewness = expected.indexSkewness();
+    if (skewness.isPresent()) {
+      assertEquals(skewness.getAsDouble(), num(normal, "indexSkewness"), "normal.indexSkewness");
+    } else {
+      assertTrue(normal.get("indexSkewness").isNull(), () -> "normal.indexSkewness: " + normal);
+    }
   }
 
   /** Asserts shifted seasons equal the detrended burn's outcomes and trends exactly, in order. */

@@ -225,3 +225,79 @@ Planner findings (`PLAN: READY`, owner OK 2026-11-26): only `BurnDto` and `Norma
 `PriceResponse` and `DetrendedDto`. Tests: `ApiTestSupport.assertBurn`/`assertNormal` and the
 nine `priceGbp` keys in `PriceEndpointPricingTest` switch name, values unchanged; a new
 recursive `assertNoFieldAnywhere` proves no `priceGbp` key remains. Reviewers: code + quant.
+
+## Amendment C — settlement currency, trend significance, normal-fit diagnostics (approved 2026-11-26)
+
+### Why
+Three quant-review findings (spec 006 re-review, 2026-11-24) that make the real London results
+readable once 1991–2023 is published:
+- Every amount is labelled GBP, but only London settles in GBP; a € city with a file would be
+  priced and reported as £.
+- With 10–30 seasons the fitted trend is often noise (London Jan: −0.077 ± 0.134 °C/yr), yet the
+  detrended prices look as firm as the plain ones.
+- The normal price assumes a symmetric index; shoulder-month indices can be skewed, and the
+  response gives no way to see it.
+
+### Scope
+In:
+- **Currency.** New property `pricer.settlement-currency.<city>=<ISO code>`; the default
+  configuration has `london=GBP`. A city not in the map → 404 `city_not_found`, message names the
+  city and the configured cities. Checked after the look-ahead guard and before `load()`, so an
+  unconfigured city never reads a file. Response gains top-level `"currency": "GBP"`.
+  Only `GBP` is accepted as a value for now (amount fields are named `…Gbp`); any other value fails
+  at startup naming the city. A € city needs a later amendment that renames the amount fields.
+- **Trend significance (library + API).** `DetrendedBurnResult.slopeTStat()` = slope / its
+  standard error, as `OptionalDouble`, empty when the standard error is 0;
+  `slopeSignificant()` = |t| ≥ `SIGNIFICANT_T_STAT` (2.0); when the standard error is 0,
+  significant iff the slope ≠ 0. JSON: `detrended.slopeTStat` (number or null) and
+  `detrended.slopeSignificant` (boolean).
+- **Normal-fit diagnostics (library + API).** `IndexDistributionResult.seasonCount()` and
+  `indexSkewness()`: adjusted Fisher–Pearson sample skewness
+  G1 = √(n(n−1)) / (n−2) · m3 / m2^{3/2}, with m_k = (1/n) Σ (x − x̄)^k over the settlement index
+  values the normal was fitted to (shifted values for the detrended normal); `OptionalDouble`,
+  empty when m2 = 0. JSON: `normal.seasonCount`, `normal.indexSkewness` (number or null), also
+  under `detrended.normal`.
+
+Out:
+- Non-GBP settlement, amount-field renames, a Java station registry (valid-but-wrong-city files).
+- Changing any price; a different significance test (t-distribution critical values); kernel
+  density or other skew-aware pricing.
+
+### Acceptance criteria
+- [x] Given the default configuration and city `london`, then 200 and `"currency": "GBP"`; prices unchanged.
+- [x] Given a city with a valid file but not in `pricer.settlement-currency`, then 404 `city_not_found` naming the city and the configured cities, and the file is not read.
+- [x] Given an unconfigured city with an in-window target, then 400 look-ahead (amendment A order kept); given an unknown city with no file, still 404.
+- [x] Given `pricer.settlement-currency.<city>` set to anything but `GBP` (e.g. `EUR`, `gbp`), then the application fails to start with a message naming the city and the value.
+- [x] Given a detrended run, then `slopeTStat` = slope / standard error (tolerance 1e-12) and `slopeSignificant` is true iff |t| ≥ 2; at |t| exactly 2 it is true.
+- [x] Given a perfectly linear trend (standard error 0, or ≤ 1e-12·|slope| from rounding), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
+- [x] Given index values {0, 0, 0, 0, 10}, then `indexSkewness` = √5 (2.2360680, tolerance 1e-9) and `seasonCount` = 5; given a symmetric set, 0 (tolerance 1e-12); given σ = 0, empty/null.
+- [x] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
+- [x] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).
+- [x] All tests green; README ("How to read the numbers": currency, t-stat, skewness), CHANGELOG, PROGRESS and the development log updated.
+
+### Decision
+Owner OK 2026-11-26: configured currency map (only `GBP` for now), boolean + t-stat, n and
+skewness. Planner findings (`PLAN: READY`, owner OK 2026-11-26):
+- `PricerProperties` gets `Map<String,String> settlementCurrency` (empty when absent);
+  `london=GBP` lives in `application.properties`; test classes add their fixture cities via
+  `@DynamicPropertySource` (entries merge). Startup fails on a value other than exactly `GBP`
+  (names city and value) and on a key not matching `[a-z0-9_-]+` (names the key; owner OK).
+  Keys should be written in lower case (relaxed binding may normalise them).
+- `PriceService(TemperatureSource, PricerProperties)`; currency check after `rejectLookAhead`,
+  before `load()`; message lists the configured cities sorted. Invalid names (`../x`) now get
+  their 404 from this check; the loader's own tests still cover its name check.
+- `slopeTStat()` empty when the standard error is 0 or NaN; `indexSkewness()` empty when
+  m2 = 0 or n < 3. Both are derived methods; record constructors unchanged.
+- Existing tests: fixture cities added to the map (PriceEndpointPricingTest,
+  PriceEndpointErrorsTest), `PriceServiceTest` passes the properties, and the three exact
+  field-set assertions gain the new names; nothing removed (owner OK).
+- Known answers: six seasons with means 9.0, 9.75, 8.0, 11.25, 10.75, 11.25 → slope 0.5,
+  SE 0.25, t = 2 exactly; five seasons 9.5, 8.5, 10.0, 11.5, 10.5 → t = √3; skewness of
+  {0,0,0,0,10} = √5. Reviewers: code + quant.
+- Review round 1 (code BLOCKED, quant SHOULD, owner-approved plan): `indexSkewness()` is empty
+  when all index values are exactly equal (the fit's sd = 0 rule), not on `m2 == 0.0`, which
+  `sum / n` rounding misses (456.1 × 9 gave G1 = 1.21). A slope standard error ≤ 1e-12·|slope| is
+  rounding noise around an exact trend: `slopeTStat` empty, significant iff slope ≠ 0 (decimal
+  means 10.1 + 0.1k gave t = 7e14). With fewer than 3 seasons (standard error NaN) the trend is
+  not significant (quant: two points are no evidence). No configured city → message says
+  "(none)".

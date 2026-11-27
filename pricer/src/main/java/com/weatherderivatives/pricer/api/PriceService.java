@@ -16,8 +16,10 @@ import java.time.DateTimeException;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.TreeSet;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -30,14 +32,18 @@ import org.springframework.stereotype.Service;
 public class PriceService {
 
   private final TemperatureSource source;
+  private final Map<String, String> settlementCurrency;
 
   /**
    * Creates the service.
    *
    * @param source where temperatures come from
+   * @param properties pricer configuration; its settlement-currency map decides which cities are
+   *     priced (spec 006 amendment C)
    */
-  public PriceService(TemperatureSource source) {
+  public PriceService(TemperatureSource source, PricerProperties properties) {
     this.source = source;
+    this.settlementCurrency = properties.settlementCurrency();
   }
 
   /**
@@ -49,7 +55,9 @@ public class PriceService {
    *     season range is invalid (the library's message names the field or the minimum), or {@code
    *     targetSeasonYear} lies inside {@code firstSeasonYear..lastSeasonYear} (look-ahead, spec 006
    *     amendment A; checked before the data are loaded)
-   * @throws CityNotFoundException if the city name is invalid or has no data file
+   * @throws CityNotFoundException if the city has no settlement currency configured (checked after
+   *     the look-ahead guard, before any data are read), or its name is invalid or it has no data
+   *     file
    * @throws com.weatherderivatives.pricer.index.TemperatureDataException if the data are invalid or
    *     a season has a missing day
    */
@@ -61,6 +69,7 @@ public class PriceService {
     int first = required(request.firstSeasonYear(), "firstSeasonYear");
     int last = required(request.lastSeasonYear(), "lastSeasonYear");
     rejectLookAhead(request.targetSeasonYear(), first, last);
+    String currency = settlementCurrency(request.city());
     DailyTemps temps = load(request.city());
 
     return clientErrors(() -> {
@@ -74,7 +83,12 @@ public class PriceService {
         detrended = detrended(burn, normal);
       }
       return new PriceResponse(
-          request.city(), seasons(plain.burn()), burn(plain.burn()), normal(plain), detrended);
+          request.city(),
+          currency,
+          seasons(plain.burn()),
+          burn(plain.burn()),
+          normal(plain),
+          detrended);
     });
   }
 
@@ -143,6 +157,24 @@ public class PriceService {
                 : OptionalInt.of(r.dailyHddDecimals())));
   }
 
+  /**
+   * Returns the city's settlement currency, or rejects a city that is not configured, without
+   * reading any file (spec 006 amendment C).
+   */
+  private String settlementCurrency(String city) {
+    String currency = settlementCurrency.get(city);
+    if (currency == null) {
+      throw new CityNotFoundException(
+          "no settlement currency configured for city: "
+              + city
+              + "; configured cities: "
+              + (settlementCurrency.isEmpty()
+                  ? "(none)"
+                  : String.join(", ", new TreeSet<>(settlementCurrency.keySet()))));
+    }
+    return currency;
+  }
+
   private DailyTemps load(String city) {
     try {
       return source.load(city);
@@ -176,7 +208,16 @@ public class PriceService {
   }
 
   private static NormalDto normal(IndexDistributionResult r) {
-    return new NormalDto(r.expectedPayoffGbp(), r.meanIndexHddDegC(), r.sdIndexHddDegC());
+    return new NormalDto(
+        r.expectedPayoffGbp(),
+        r.meanIndexHddDegC(),
+        r.sdIndexHddDegC(),
+        r.seasonCount(),
+        boxed(r.indexSkewness()));
+  }
+
+  private static Double boxed(OptionalDouble value) {
+    return value.isPresent() ? value.getAsDouble() : null;
   }
 
   private static DetrendedDto detrended(DetrendedBurnResult burn, IndexDistributionResult normal) {
@@ -197,6 +238,8 @@ public class PriceService {
         burn.targetSeasonYear(),
         burn.slopeDegCPerYear(),
         burn.slopeStdErrDegCPerYear(),
+        boxed(burn.slopeTStat()),
+        burn.slopeSignificant(),
         List.copyOf(seasons),
         burn(burn.burn()),
         normal(normal));

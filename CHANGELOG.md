@@ -14,6 +14,15 @@
   with or without a cap. In-house normal CDF (Cody erfc); no new dependency.
 
 ### Changed
+- pricer (spec 006 amendment C): `POST /price` prices only cities with a settlement currency in
+  the new `pricer.settlement-currency.<city>` property (default `london=GBP`); any other city is
+  a 404 `city_not_found` naming the configured cities, checked after the look-ahead guard and
+  before any file is read (so invalid names now get their 404 here). Only `GBP` is accepted; a
+  different value or a key that is not a lower-case city name fails at startup. New response
+  fields: `currency`; `detrended.slopeTStat` / `slopeSignificant` (|t| ≥ 2, a rule of thumb);
+  `normal.seasonCount` / `indexSkewness` (also under `detrended.normal`). Library:
+  `DetrendedBurnResult.slopeTStat()` / `slopeSignificant()`,
+  `IndexDistributionResult.seasonCount()` / `indexSkewness()`. Prices unchanged.
 - **Breaking** — pricer (spec 006 amendment B): `POST /price` renames `burn.priceGbp` and
   `normal.priceGbp` (also under `detrended`) to `expectedPayoffGbp`. Both are undiscounted
   expected payoffs with no risk loading, not quotable prices. No alias for the old name;
