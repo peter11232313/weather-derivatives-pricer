@@ -208,6 +208,7 @@ A local HTTP server (Spring Boot) prices a contract with every method in one cal
 cd pricer && ./gradlew bootRun          # reads data/pricer/<city>.parquet (from the repo root)
 # other folder: ./gradlew bootRun --args='--pricer.data-dir=/path/to/folder'
 #   (files there must carry the window metadata from `dataprep process`/`publish`)
+# another GBP city: --pricer.settlement-currency.<city>=GBP (lower-case key, as the file name)
 
 curl -s http://127.0.0.1:8080/health    # {"status":"ok"}
 
@@ -222,11 +223,16 @@ curl -s -X POST http://127.0.0.1:8080/price -H 'Content-Type: application/json' 
   `lastSeasonYear` are required. Optional: `capGbp`, `dailyHddDecimals`, `baseC` (default 18) and
   `targetSeasonYear`. Unknown fields and wrong types (e.g. `"400"`, `1.5` decimals, `"type": 1`)
   are rejected.
-- **Response:** each season's index and payoff, `burn` (expected payoff, standard error, payoff
-  sd, min, max, mean index) and `normal` (expected payoff, μ, σ). With `targetSeasonYear`,
-  `detrended` adds the slope and its standard error, the shifted seasons (with each season's mean
-  temperature and shift) and the detrended burn and normal expected payoffs; otherwise
-  `"detrended": null`.
+- **Response:** `currency`, each season's index and payoff, `burn` (expected payoff, standard
+  error, payoff sd, min, max, mean index) and `normal` (expected payoff, μ, σ, `seasonCount`,
+  `indexSkewness`). With `targetSeasonYear`, `detrended` adds the slope, its standard error,
+  `slopeTStat` and `slopeSignificant`, the shifted seasons (with each season's mean temperature
+  and shift) and the detrended burn and normal; otherwise `"detrended": null`.
+- **Cities** are priced only if they have a settlement currency in
+  `pricer.settlement-currency.<city>` (spec 006 amendment C; default `london=GBP`). Any other city
+  is a 404, even with a data file, and its file is not read. Only `GBP` is accepted for now (the
+  amount fields are named `…Gbp`); another value, or a key that is not a lower-case city name,
+  stops the server at startup.
 - **At least 5 seasons** (the normal model's minimum), and **10 with `targetSeasonYear`**.
 - **No look-ahead** (spec 006 amendment A): a `targetSeasonYear` inside
   `firstSeasonYear..lastSeasonYear` is a 400, checked before the data are read, because the
@@ -247,6 +253,17 @@ How to read the numbers:
   include the uncertainty of σ itself (about ±25% with 10 seasons).
 - The detrended standard errors leave out the uncertainty of the fitted slope; check
   `slopeStdErrDegCPerYear`.
+- Every `…Gbp` amount is in the settlement currency named by `currency`.
+- `slopeTStat` is the slope divided by its standard error (`null` for an exactly linear history).
+  `slopeSignificant` means |t| ≥ 2: a **rule of thumb, not p < 0.05**. With 10 seasons the 5%
+  critical value is 2.31 (|t| = 2 is about p = 0.08), with 30 seasons 2.05; autocorrelated
+  seasons make |t| look larger than it is. When it is `false`, the trend shift is mostly noise and
+  the detrended price is about as uncertain as the plain one; their difference may mean nothing.
+- `indexSkewness` is the sample skewness (adjusted Fisher–Pearson G1) of the index values the
+  normal was fitted to (the shifted ones for `detrended.normal`). G1 > 0 is a long tail of cold
+  seasons, so the normal model underprices out-of-the-money calls; G1 < 0 the reverse. Its own
+  standard error is about √(6/n) (0.77 at 10 seasons, 0.45 at 30), so only |G1| above about 1 says
+  much. `null` when all values are equal or there are fewer than 3 seasons.
 
 ## Docs
 - Specs: `docs/specs/` · Decisions: `docs/decisions/` · Agent rules: `AGENTS.md`

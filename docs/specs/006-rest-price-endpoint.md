@@ -264,16 +264,16 @@ Out:
   density or other skew-aware pricing.
 
 ### Acceptance criteria
-- [ ] Given the default configuration and city `london`, then 200 and `"currency": "GBP"`; prices unchanged.
-- [ ] Given a city with a valid file but not in `pricer.settlement-currency`, then 404 `city_not_found` naming the city and the configured cities, and the file is not read.
-- [ ] Given an unconfigured city with an in-window target, then 400 look-ahead (amendment A order kept); given an unknown city with no file, still 404.
-- [ ] Given `pricer.settlement-currency.<city>` set to anything but `GBP` (e.g. `EUR`, `gbp`), then the application fails to start with a message naming the city and the value.
-- [ ] Given a detrended run, then `slopeTStat` = slope / standard error (tolerance 1e-12) and `slopeSignificant` is true iff |t| ≥ 2; at |t| exactly 2 it is true.
-- [ ] Given a perfectly linear trend (standard error 0), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
-- [ ] Given index values {0, 0, 0, 0, 10}, then `indexSkewness` = √5 (2.2360680, tolerance 1e-9) and `seasonCount` = 5; given a symmetric set, 0 (tolerance 1e-12); given σ = 0, empty/null.
-- [ ] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
-- [ ] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).
-- [ ] All tests green; README ("How to read the numbers": currency, t-stat, skewness), CHANGELOG, PROGRESS and the development log updated.
+- [x] Given the default configuration and city `london`, then 200 and `"currency": "GBP"`; prices unchanged.
+- [x] Given a city with a valid file but not in `pricer.settlement-currency`, then 404 `city_not_found` naming the city and the configured cities, and the file is not read.
+- [x] Given an unconfigured city with an in-window target, then 400 look-ahead (amendment A order kept); given an unknown city with no file, still 404.
+- [x] Given `pricer.settlement-currency.<city>` set to anything but `GBP` (e.g. `EUR`, `gbp`), then the application fails to start with a message naming the city and the value.
+- [x] Given a detrended run, then `slopeTStat` = slope / standard error (tolerance 1e-12) and `slopeSignificant` is true iff |t| ≥ 2; at |t| exactly 2 it is true.
+- [x] Given a perfectly linear trend (standard error 0), then `slopeTStat` is empty/null and `slopeSignificant` is true; given slope 0 and standard error 0, false.
+- [x] Given index values {0, 0, 0, 0, 10}, then `indexSkewness` = √5 (2.2360680, tolerance 1e-9) and `seasonCount` = 5; given a symmetric set, 0 (tolerance 1e-12); given σ = 0, empty/null.
+- [x] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
+- [x] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).
+- [x] All tests green; README ("How to read the numbers": currency, t-stat, skewness), CHANGELOG, PROGRESS and the development log updated.
 
 ### Decision
 Owner OK 2026-11-26: configured currency map (only `GBP` for now), boolean + t-stat, n and
@@ -294,3 +294,10 @@ skewness. Planner findings (`PLAN: READY`, owner OK 2026-11-26):
 - Known answers: six seasons with means 9.0, 9.75, 8.0, 11.25, 10.75, 11.25 → slope 0.5,
   SE 0.25, t = 2 exactly; five seasons 9.5, 8.5, 10.0, 11.5, 10.5 → t = √3; skewness of
   {0,0,0,0,10} = √5. Reviewers: code + quant.
+- Review round 1 (code BLOCKED, quant SHOULD, owner-approved plan): `indexSkewness()` is empty
+  when all index values are exactly equal (the fit's sd = 0 rule), not on `m2 == 0.0`, which
+  `sum / n` rounding misses (456.1 × 9 gave G1 = 1.21). A slope standard error ≤ 1e-12·|slope| is
+  rounding noise around an exact trend: `slopeTStat` empty, significant iff slope ≠ 0 (decimal
+  means 10.1 + 0.1k gave t = 7e14). With fewer than 3 seasons (standard error NaN) the trend is
+  not significant (quant: two points are no evidence). No configured city → message says
+  "(none)".

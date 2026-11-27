@@ -220,6 +220,16 @@ Contents
 | 5i.3 | Changing test keys could look like editing tests to pass. | Owner OK beforehand: key renames only, expected values and tolerances unchanged; a recursive `assertNoFieldAnywhere` (with its own `AssertNoFieldAnywhereTest` so it cannot pass vacuously) proves no `priceGbp` remains, including under `detrended`. Red run: 22 failures, all on the old key. |
 | 5i.4 | code-reviewer round 1 blocked on PROGRESS and this log not yet updated (AC4). | Done in wrap-up; README "normal price" wording aligned too. |
 
+## 5j. Spec 006 amendment C — settlement currency, trend t-stat, normal skewness
+
+| # | Difficulty / question | Resolution and rationale |
+| --- | --- | --- |
+| 5j.1 | Every amount was labelled GBP, but only London settles in GBP. | Owner: a configured `pricer.settlement-currency` map (default `london=GBP`) and a 404 for other cities, checked after the look-ahead guard and before `load()`. Only `GBP` is accepted while the amount fields are named `…Gbp`; a € city needs a field rename first. Bad values or keys fail at startup, so a typo cannot silently price nothing. |
+| 5j.2 | How to bind a Map in the properties record with a default. | `@DefaultValue Map` gives an empty map when absent; `london=GBP` lives in `application.properties`; test classes add fixture cities through `@DynamicPropertySource` (map entries merge across sources). |
+| 5j.3 | How to flag a noisy trend. | `slopeTStat` (slope / SE) and `slopeSignificant` (|t| ≥ 2): a documented rule of thumb, not a t critical value (2.31 at 10 seasons). With fewer than 3 seasons: not significant (quant). |
+| 5j.4 | Review round 1: float equality. `m2 == 0.0` missed equal non-dyadic indices (456.1 × 9 → G1 = 1.21, next to sd = 0), and decimal linear means left SE ≈ 1e-15 (t = 7e14). | Skewness is empty when all inputs are exactly equal (the fit's own rule); SE ≤ 1e-12·|slope| counts as an exact trend. Both pinned by tests written first. |
+| 5j.5 | Invalid city names (`../x`) now get their 404 from the currency check. | Accepted: same status, file still never read; the loader's own tests keep covering its name check. |
+
 ## 6. Workflow lessons
 
 - **Tests first, always.** A red commit precedes every implementation; tests are never weakened. Reviews only ever added tests.
