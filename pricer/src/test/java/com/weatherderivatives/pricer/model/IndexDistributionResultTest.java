@@ -71,6 +71,25 @@ class IndexDistributionResultTest {
   }
 
   @Test
+  void amendmentC_allValuesEqualButNotExactlyDivisible_skewnessEmpty() {
+    // review round 1: sum / n can land 1 ulp off for such values, so every deviation is a tiny
+    // non-zero number and G1 would come out near ±1 instead of empty (sd is 0 for them).
+    double[] equal456 = new double[9];
+    java.util.Arrays.fill(equal456, 456.1);
+    double[] equalTenth = new double[10];
+    java.util.Arrays.fill(equalTenth, 0.1);
+
+    IndexDistributionResult a = result(equal456);
+    IndexDistributionResult b = result(equalTenth);
+
+    assertTrue(
+        a.indexSkewness().isEmpty(),
+        () -> "456.1 x 9: expected empty but was " + a.indexSkewness());
+    assertTrue(
+        b.indexSkewness().isEmpty(), () -> "0.1 x 10: expected empty but was " + b.indexSkewness());
+  }
+
+  @Test
   void amendmentC_twoSeasons_skewnessEmpty() {
     // planner finding: empty when n < 3 (G1 divides by n − 2)
     IndexDistributionResult r = result(0.0, 10.0);

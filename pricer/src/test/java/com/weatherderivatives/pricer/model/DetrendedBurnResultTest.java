@@ -119,5 +119,21 @@ class DetrendedBurnResultTest {
     assertTrue(Double.isNaN(r.slopeStdErrDegCPerYear()), "precondition: SE is NaN");
 
     assertTrue(r.slopeTStat().isEmpty(), () -> "expected empty t but was " + r.slopeTStat());
+    // quant review: two points are no evidence of a trend
+    assertFalse(r.slopeSignificant(), "fewer than 3 seasons must not be significant");
+  }
+
+  @Test
+  void amendmentC_linearTrendWithRoundingNoise_tStatEmpty_significant() {
+    // review round 1: decimal means 10.1 + 0.1k are linear in exact arithmetic, but binary
+    // rounding leaves residuals near 1e-15, so the standard error is tiny but not 0; t must still
+    // be empty (an exact trend), not ~1e14.
+    DetrendedBurnResult r =
+        result(2001, 0.1, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0);
+    double se = r.slopeStdErrDegCPerYear();
+    assertTrue(se > 0.0 && se < 1e-12 * 0.1, () -> "precondition: tiny non-zero SE but was " + se);
+
+    assertTrue(r.slopeTStat().isEmpty(), () -> "expected empty t but was " + r.slopeTStat());
+    assertTrue(r.slopeSignificant(), "an exact non-zero trend must be significant");
   }
 }
