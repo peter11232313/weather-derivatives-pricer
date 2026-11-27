@@ -274,3 +274,23 @@ Out:
 - [ ] Given `targetSeasonYear`, then `detrended.normal` carries `seasonCount` and `indexSkewness` computed on the shifted values.
 - [ ] Existing prices, statuses and messages unchanged except the new 404 for unconfigured cities; existing API test classes only add their fixture cities to the currency map (setup change, owner OK).
 - [ ] All tests green; README ("How to read the numbers": currency, t-stat, skewness), CHANGELOG, PROGRESS and the development log updated.
+
+### Decision
+Owner OK 2026-11-26: configured currency map (only `GBP` for now), boolean + t-stat, n and
+skewness. Planner findings (`PLAN: READY`, owner OK 2026-11-26):
+- `PricerProperties` gets `Map<String,String> settlementCurrency` (empty when absent);
+  `london=GBP` lives in `application.properties`; test classes add their fixture cities via
+  `@DynamicPropertySource` (entries merge). Startup fails on a value other than exactly `GBP`
+  (names city and value) and on a key not matching `[a-z0-9_-]+` (names the key; owner OK).
+  Keys should be written in lower case (relaxed binding may normalise them).
+- `PriceService(TemperatureSource, PricerProperties)`; currency check after `rejectLookAhead`,
+  before `load()`; message lists the configured cities sorted. Invalid names (`../x`) now get
+  their 404 from this check; the loader's own tests still cover its name check.
+- `slopeTStat()` empty when the standard error is 0 or NaN; `indexSkewness()` empty when
+  m2 = 0 or n < 3. Both are derived methods; record constructors unchanged.
+- Existing tests: fixture cities added to the map (PriceEndpointPricingTest,
+  PriceEndpointErrorsTest), `PriceServiceTest` passes the properties, and the three exact
+  field-set assertions gain the new names; nothing removed (owner OK).
+- Known answers: six seasons with means 9.0, 9.75, 8.0, 11.25, 10.75, 11.25 → slope 0.5,
+  SE 0.25, t = 2 exactly; five seasons 9.5, 8.5, 10.0, 11.5, 10.5 → t = √3; skewness of
+  {0,0,0,0,10} = √5. Reviewers: code + quant.
